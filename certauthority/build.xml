@@ -419,6 +419,21 @@
         <!-- Upload result to web server -->
         <antcall target="upload-overlay"/>
     </target>
+
+    <!-- This target is used to generate a single ZIP file containing all
+         of the security services.
+         * Type "ant security-overlay" from the installer module.
+         * cd $CIP/configs/ping
+         * ruby ASMT-TRANSFORM-EXAMPLE.rb
+         * This will generate the following files that should be updated
+           in the ZIP file:
+             configs/common/config_common.jar
+             configs/glmtrans/config_glmtrans.jar
+             configs/ping/society_config/*
+             configs/security/bootpolicies.jar
+             configs/security/configs_securityservices.jar
+             configs/security/userFiles.jar
+    -->
     <target name="security-overlay" depends="all">
         <delete file="security-overlay.zip"/>
         <for list="${module.build.list}" delimiter="," param="build.module.name">
@@ -427,6 +442,22 @@
              </zip>
            </sequential>
         </for>
+        <exec dir="${cougaar.install.path}/configs/ping"
+              executable="ruby">
+          <arg value="ASMT-TRANSFORM-EXAMPLE.rb"/>
+        </exec>
+        <zip destfile="security-overlay.zip" update="true">
+          <fileset dir="${cougaar.install.path}">
+            <patternset>
+               <include name="configs/common/config_common.jar"/>
+               <include name="configs/glmtrans/config_glmtrans.jar"/>
+               <include name="configs/ping/society_config/**"/>
+               <include name="configs/security/bootpolicies.jar"/>
+               <include name="configs/security/configs_securityservices.jar"/>
+               <include name="configs/security/userFiles.jar"/>
+            </patternset>
+          </fileset>
+        </zip>
     </target>
 
     <!-- The INSTALL target does everything but cvs-update and javadoc -->
