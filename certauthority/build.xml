@@ -328,6 +328,21 @@
                 <include name="*.jar"/>
             </fileset>
         </copy>
+        <if>
+          <available file="${securityservices.staging}/sys" type="dir"/>
+          <then>
+            <signjar alias="privileged" 
+              keystore="${securityservices.configs}/sign-jars/signingCA_keystore" 
+              storepass="keystore" verbose="false">
+              <!-- It's not a good idea to store the signed version in CVS. It's a pain to remove
+                   the signature when upgrading to a new key, especially when the key type changes
+                   and the jar file has multiple signatures. -->
+                <fileset dir="${securityservices.staging}/sys">
+                    <include name="*.jar"/>
+                </fileset>
+            </signjar>
+          </then>
+        </if>
         <!-- Not all modules may have a lib subdirectory, so do not fail if that directory
              does not exist. -->
         <copy todir="${securityservices.staging}/lib" overwrite="true"
@@ -679,7 +694,39 @@
     </target>
 
     <target name="commit-build-file">
-       <cvs cvsRoot="${env.CVSROOT}" cvsRsh="${env.CVS_RSH}"
+       <!-- First, determine what the CVSROOT should be.
+            1) Get it from a cvsroot.${project.name}.properties file
+            2) Try to get it from the CVS/Root file,
+            3) otherwise get it from the CVSROOT environment variable. -->
+       <echo message="Loading CVSROOT from cvsroot.${build.module.name}.properties"/>
+       <loadfile property="cvs.root" srcFile="cvsroot.${build.module.name}.properties" failonerror="false">
+         <filterchain>
+           <striplinebreaks/>
+           <expandproperties/>
+         </filterchain>
+       </loadfile>
+       <if>
+         <not>
+           <isset property="cvs.root"/>
+         </not>
+         <then>
+           <loadfile property="cvs.root" srcFile="CVS/Root" failonerror="false">
+             <filterchain>
+               <striplinebreaks/>
+             </filterchain>
+           </loadfile>
+         </then>
+       </if>
+       <if>
+         <not>
+           <isset property="cvs.root"/>
+         </not>
+         <then>
+           <property name="cvs.root" value="${env.CVSROOT}"/>
+         </then>
+       </if>
+       <echo message="CVSROOT: ${cvs.root}"/>
+       <cvs cvsRoot="${cvs.root}" cvsRsh="${env.CVS_RSH}"
             command="-q commit -m '${commit.message}' build.xml"
             dest="${securityservices.base}/../${build.module.name}"
             failonerror="true"/>
