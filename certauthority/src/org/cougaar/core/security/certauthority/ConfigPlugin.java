@@ -311,7 +311,7 @@ public class ConfigPlugin
     }
     if (ts == null) {
       if (log.isErrorEnabled()) {
-        log.error("Unable to obtain ThreadService");
+        log.error("Unable to obtain ThreadService - starting a non-cougaar thread");
       }
       t.start();
     }
