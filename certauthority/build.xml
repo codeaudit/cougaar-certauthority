@@ -68,7 +68,7 @@
           <echo message="Anthill build - Using JAR files from ${anthill.dependency.artifacts.dir}"/>
           <path id="dependency.artificats.dir.path">    
             <fileset dir="${anthill.dependency.artifacts.dir}">
-              <include name="*/*.jar"/>
+              <include name="*.jar"/>
             </fileset>
           </path>
         </then>
