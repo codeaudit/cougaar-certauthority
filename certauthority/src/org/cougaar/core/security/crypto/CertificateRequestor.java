@@ -94,7 +94,7 @@ import sun.security.x509.X509CertImpl;
  * DOCUMENT ME!
  *
  * @author $author$
- * @version $Revision: 1.3 $
+ * @version $Revision: 1.4 $
  */
 public class CertificateRequestor implements CertificateRequestorService {
   private ServiceBroker serviceBroker;
@@ -149,8 +149,10 @@ public class CertificateRequestor implements CertificateRequestorService {
     if (secprop != null) {
     	role =secprop.getProperty(SecurityPropertiesService.SECURITY_ROLE);
     }
-    if (role == null && log.isInfoEnabled() == true) {
-      log.info("Role is not defined. Setting empty role");
+    if (role == null) {
+      if (log.isInfoEnabled()) {
+        log.info("Role is not defined. Setting empty role");
+      }
       role = "";
     }
       try {
