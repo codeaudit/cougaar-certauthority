@@ -37,7 +37,7 @@ import org.cougaar.core.security.util.NodeInfo;
 import sun.security.x509.X500Name;
 
 public class AutoConfigPlugin extends ConfigPlugin {
-  Vector calist = new Vector();
+  private Vector calist = new Vector();
 
   public void setParameter(Object o) {
     if (!(o instanceof List)) {
@@ -95,5 +95,12 @@ public class AutoConfigPlugin extends ConfigPlugin {
     } catch (IOException iox) {}
 
     keyRingService.checkOrMakeCert(dname, false, tcp);
+  }
+  
+  /* (non-Javadoc)
+   * @see org.cougaar.util.GenericStateModel#stop()
+   */
+  public synchronized void stop() {
+    super.stop();
   }
 }

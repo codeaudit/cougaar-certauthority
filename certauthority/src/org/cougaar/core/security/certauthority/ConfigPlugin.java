@@ -29,9 +29,11 @@ package org.cougaar.core.security.certauthority;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.security.cert.X509Certificate;
+import java.util.ArrayList;
 import java.util.Hashtable;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Stack;
 
 import javax.net.ssl.SSLSocketFactory;
 import javax.security.auth.x500.X500Principal;
@@ -56,7 +58,9 @@ import org.cougaar.core.security.ssl.BasicSSLSocketFactory;
 import org.cougaar.core.security.util.NodeInfo;
 import org.cougaar.core.security.util.ServletRequestUtil;
 import org.cougaar.core.service.LoggingService;
+import org.cougaar.core.service.ThreadService;
 import org.cougaar.core.service.identity.AgentIdentityService;
+import org.cougaar.core.thread.Schedulable;
 import org.cougaar.util.log.Logger;
 import org.cougaar.util.log.LoggerFactory;
 import org.cougaar.core.component.ServiceAvailableEvent;
@@ -94,6 +98,15 @@ public class ConfigPlugin
    */
   private SSLSocketFactory noCheckSocketFactory;
   
+  /**
+   * A List<CARequestThread> of outstanding Threads
+   */
+  private Stack caRequestThreads;
+
+  public ConfigPlugin() {
+    caRequestThreads = new Stack();
+  }
+  
   public void setBindingSite(BindingSite bs) {
     bindingSite = bs;
   }
@@ -101,19 +114,11 @@ public class ConfigPlugin
   public void setState(Object loadState) {}
   public Object getState() {return null;}
 
-  public synchronized void unload() {
-    super.unload();
-    // unload services in reverse order of "load()"
-    //ServiceBroker sb = bindingSite.getServiceBroker();
-    // release services
-  }
-
   public void load() {
     super.load();
     _sb = bindingSite.getServiceBroker();
 
     log = (LoggingService) _sb.getService(this, LoggingService.class, null);
-
 
     configParser = (ConfigParserService)
       _sb.getService(this,
@@ -185,6 +190,9 @@ public class ConfigPlugin
         log.info("HTTP port not parsable. Not using HTTP");
       }
     }
+    _sb.releaseService(this, SecurityPropertiesService.class, sps);
+    sps = null;
+    
     try {
       httpsport = Integer.parseInt(System.getProperty("org.cougaar.lib.web.https.port", null));
     }
@@ -296,156 +304,63 @@ public class ConfigPlugin
   }
 
   protected void addTrustedPolicy(String param, boolean primaryCA) {
+    ThreadService ts = (ThreadService)_sb.getService(this, ThreadService.class, null);
     CARequestThread t = new CARequestThread(param, primaryCA);
-    t.start();
+    synchronized(caRequestThreads) {
+      caRequestThreads.push(t);
+    }
+    if (ts == null) {
+      if (log.isErrorEnabled()) {
+        log.error("Unable to obtain ThreadService");
+      }
+      t.start();
+    }
+    else {
+      Schedulable sched = ts.getThread(this, t);
+      sched.start();
+      _sb.releaseService(this, ThreadService.class, ts);
+    }
   }
 
-  class CARequestThread
-    extends Thread {
-    String infoURL;
-    String requestURL;
-    int waittime = 5000;
-    boolean isPrimaryCA = true;
-    int delayRequest = 1800000;
-
-    public CARequestThread(String param, boolean primaryCA) {
-      isPrimaryCA = primaryCA;
-
-      String cahost = param.substring(0, param.indexOf(':'));
-      int agentindex = param.indexOf(':');
-      String caagent = param.substring(agentindex+1, param.length());
-
-      // if httpport param is given use it
-      int portindex = caagent.indexOf(':');
-      if (portindex != -1) {
-        portindex += agentindex + 1;
-        caagent = param.substring(agentindex+1, portindex);
-        try {
-          httpport = -1;
-          httpport = Integer.parseInt(param.substring(portindex + 1, param.lastIndexOf(':')));
-        }
-        catch (Exception e) {
-          if (log.isInfoEnabled()) {
-            log.info("HTTP port not parsable. Not using HTTP");
-          }
-        }
-        try {
-          httpsport = -1;
-          httpsport = Integer.parseInt(param.substring(param.lastIndexOf(':')+1, param.length()));
-        }
-        catch (Exception e) {
-          if (log.isInfoEnabled()) {
-            log.info("HTTPS port not parsable. Not using HTTPS");
-          }
-        }
-        if (log.isDebugEnabled()) {
-          log.debug("agent: " + caagent + " / " + httpport + " / " + httpsport);
-        }
-        if (httpport == -1 && httpsport == -1) {
-          // This is not a valid configuration. At least HTTP or HTTPS should be enabled.
-          if (log.isErrorEnabled()) {
-            log.error("Both HTTP and HTTPS ports are disabled");
-          }
-          throw new RuntimeException("Both HTTP and HTTPS ports are disabled");
-        }
-      }
-
-      if (httpsport != -1) {
-        // If HTTPS port is enabled, select it by default
-        infoURL = "https://" + cahost + ":" +
-          httpsport + "/$" + caagent + cryptoClientPolicy.getInfoURL();
-        requestURL = "https://" + cahost + ":" + httpsport;
-      }
-      else {
-        infoURL = "http://" + cahost + ":" +
-          httpport + "/$" + caagent + cryptoClientPolicy.getInfoURL();
-        requestURL = "http://" + cahost + ":" + httpport;
-      }
-
-      requestURL += "/$" + caagent + cryptoClientPolicy.getRequestURL();
-      //System.out.println("infoURL: " + infoURL + " : requestURL " + requestURL);
-
-      try {
-        String waitPoll = System.getProperty("org.cougaar.core.security.configpoll", "5000");
-        waittime = Integer.parseInt(waitPoll);
-      } catch (Exception ex) {
-        if (log.isWarnEnabled()) {
-          log.warn("Unable to parse configpoll property: " + ex.toString());
-        }
-      }
-
-      if (!isPrimaryCA) {
-        try {
-          String waitPoll = System.getProperty("org.cougaar.core.security.robustness.delaypoll", "1800000");
-          delayRequest = Integer.parseInt(waitPoll);
-        } catch (Exception ex) {
-          if (log.isWarnEnabled()) {
-            log.warn("Unable to parse delaypoll property: " + ex.toString());
-          }
-        }
+  public synchronized void stop() {
+    // Stop threads.
+    synchronized(caRequestThreads) {
+      while (!caRequestThreads.empty()) {
+        CARequestThread t = (CARequestThread)caRequestThreads.pop();
+        t.cancelRequest();
       }
     }
-
-    public void run() {
-      while (true) {
-
-        try {
-          Thread.sleep(waittime);
-
-          ObjectInputStream ois = new ObjectInputStream(
-            new ServletRequestUtil().sendRequest(infoURL, "", waittime, noCheckSocketFactory));
-          // return a trusted policy for this plug to send PKCS request
-          // also return a certificate to install in the trusted store
-          // the certificate may not be the same as the one specified by
-          // the trusted policy, but need to be the upper level signer.
-          // for simplicity the root CA certificate will return
-
-          // before the trusted CA starts up completely the CA
-          // may return empty, in which case this thread will wait
-          // until it gets the right answer.
-          if (log.isDebugEnabled()) {
-            log.debug("received reply from CA.");
-          }
-
-          CAInfo info = (CAInfo)ois.readObject();
-          ois.close();
-
-          // save trusted CA first, if backup CA use a delay to request certs
-          saveTrustedCert(info);
-          // there is a TrustedCAConfigPlugin that only installs trusted cert and policy
-          if (!isPrimaryCA) {
-            if (log.isInfoEnabled()) {
-              log.info("Start delay from requesting cert from backup CA: " + infoURL);
-            }
-            try {
-              long timeLeft = delayRequest + pollStart - System.currentTimeMillis();
-              if (timeLeft > 0) {
-                Thread.sleep(timeLeft);
-              }
-            } catch (Exception ex) {} 
-            if (log.isInfoEnabled()) {
-              log.info("Start to request certificates from backup CA: " + infoURL);
-            }
-          }
-
-          checkOrMakeIdentity(info, requestURL);
-
-          return;
-        } catch (Exception ex) {
-          if (ex instanceof IOException) {
-            if (log.isDebugEnabled()) {
-              log.debug("Waiting to get trusted policy from " + infoURL);
-            }
-          }
-          else {
-            if (log.isWarnEnabled()) {
-              log.warn("Exception occurred. ", ex);
-            }
-            return;
-          }
-        }
-      }
+    
+    // Release services in reverse order of init()
+    // Release KeyRingService
+    if (keyRingService != null) {
+      _sb.releaseService(this, KeyRingService.class, keyRingService);
+      keyRingService = null;
     }
+    // Release CertificateCacheService
+    if (cacheservice != null) {
+      _sb.releaseService(this, CertificateCacheService.class, cacheservice);
+      cacheservice = null;
+    }
+    
+    // release services in reverse order of "load()"
+    // release CertificateRequestorService
+    if (certRequestor != null) {
+      _sb.releaseService(this, CertificateRequestorService.class, certRequestor);
+      certRequestor = null;
+    }
+    // release ConfigParserService
+    if (configParser != null) {
+      _sb.releaseService(this, ConfigParserService.class, configParser);
+      configParser = null;
+    }
+
+    // release log services
+    if (log != null) {
+      _sb.releaseService(this, LoggingService.class, log);
+      log = null;
+    }
+    super.stop();
   }
 
   protected void setCAInfo(CAInfo info, String requestURL) {
@@ -572,6 +487,209 @@ public class ConfigPlugin
   }
 
   protected void setupSubscriptions() {
+  }
+
+  /**
+   * @author srosset
+   *
+   */
+  private class CARequestThread
+    extends Thread
+  {
+    private String infoURL;
+    private String requestURL;
+    private int waittime = 5000;
+    private boolean isPrimaryCA = true;
+    private int delayRequest = 1800000;
+    private boolean cancelRequest = false;
+    
+    public CARequestThread(String param, boolean primaryCA) {
+      isPrimaryCA = primaryCA;
+
+      String cahost = param.substring(0, param.indexOf(':'));
+      int agentindex = param.indexOf(':');
+      String caagent = param.substring(agentindex+1, param.length());
+
+      // if httpport param is given use it
+      int portindex = caagent.indexOf(':');
+      if (portindex != -1) {
+        portindex += agentindex + 1;
+        caagent = param.substring(agentindex+1, portindex);
+        try {
+          httpport = -1;
+          httpport = Integer.parseInt(param.substring(portindex + 1, param.lastIndexOf(':')));
+        }
+        catch (Exception e) {
+          if (log.isInfoEnabled()) {
+            log.info("HTTP port not parsable. Not using HTTP");
+          }
+        }
+        try {
+          httpsport = -1;
+          httpsport = Integer.parseInt(param.substring(param.lastIndexOf(':')+1, param.length()));
+        }
+        catch (Exception e) {
+          if (log.isInfoEnabled()) {
+            log.info("HTTPS port not parsable. Not using HTTPS");
+          }
+        }
+        if (log.isDebugEnabled()) {
+          log.debug("agent: " + caagent + " / " + httpport + " / " + httpsport);
+        }
+        if (httpport == -1 && httpsport == -1) {
+          // This is not a valid configuration. At least HTTP or HTTPS should be enabled.
+          if (log.isErrorEnabled()) {
+            log.error("Both HTTP and HTTPS ports are disabled");
+          }
+          throw new RuntimeException("Both HTTP and HTTPS ports are disabled");
+        }
+      }
+
+      if (httpsport != -1) {
+        // If HTTPS port is enabled, select it by default
+        infoURL = "https://" + cahost + ":" +
+          httpsport + "/$" + caagent + cryptoClientPolicy.getInfoURL();
+        requestURL = "https://" + cahost + ":" + httpsport;
+      }
+      else {
+        infoURL = "http://" + cahost + ":" +
+          httpport + "/$" + caagent + cryptoClientPolicy.getInfoURL();
+        requestURL = "http://" + cahost + ":" + httpport;
+      }
+
+      requestURL += "/$" + caagent + cryptoClientPolicy.getRequestURL();
+      //System.out.println("infoURL: " + infoURL + " : requestURL " + requestURL);
+
+      try {
+        String waitPoll = System.getProperty("org.cougaar.core.security.configpoll", "5000");
+        waittime = Integer.parseInt(waitPoll);
+      } catch (Exception ex) {
+        if (log.isWarnEnabled()) {
+          log.warn("Unable to parse configpoll property: " + ex.toString());
+        }
+      }
+
+      if (!isPrimaryCA) {
+        try {
+          String waitPoll = System.getProperty("org.cougaar.core.security.robustness.delaypoll", "1800000");
+          delayRequest = Integer.parseInt(waitPoll);
+        } catch (Exception ex) {
+          if (log.isWarnEnabled()) {
+            log.warn("Unable to parse delaypoll property: " + ex.toString());
+          }
+        }
+      }
+    }
+
+    /**
+     * Cancels outstanding request 
+     */
+    public void cancelRequest() {
+      cancelRequest = true;
+      this.interrupt();
+    }
+
+    public void run() {
+      if (log.isDebugEnabled()) {
+        log.debug("Launching thread...");
+      }
+      while (true) {
+        if (cancelRequest) {
+          // We are told to cancel the request
+          if (log.isDebugEnabled()) {
+            log.debug("Request has been cancelled");
+          }
+          return;
+        }
+        try {
+          Thread.sleep(waittime);
+        }
+        catch (InterruptedException e) {
+          if (cancelRequest) {
+            // We are told to cancel the request
+            if (log.isDebugEnabled()) {
+              log.debug("Request has been cancelled");
+            }
+            return;
+          }
+        }
+        try {
+          ObjectInputStream ois = new ObjectInputStream(
+            new ServletRequestUtil().sendRequest(infoURL, "", waittime, noCheckSocketFactory));
+          // return a trusted policy for this plug to send PKCS request
+          // also return a certificate to install in the trusted store
+          // the certificate may not be the same as the one specified by
+          // the trusted policy, but need to be the upper level signer.
+          // for simplicity the root CA certificate will return
+
+          // before the trusted CA starts up completely the CA
+          // may return empty, in which case this thread will wait
+          // until it gets the right answer.
+          if (log.isDebugEnabled()) {
+            log.debug("received reply from CA.");
+          }
+
+          CAInfo info = (CAInfo)ois.readObject();
+          ois.close();
+
+          // save trusted CA first, if backup CA use a delay to request certs
+          saveTrustedCert(info);
+          // there is a TrustedCAConfigPlugin that only installs trusted cert and policy
+          if (!isPrimaryCA) {
+            if (log.isInfoEnabled()) {
+              log.info("Start delay from requesting cert from backup CA: " + infoURL);
+            }
+            try {
+              long timeLeft = delayRequest + pollStart - System.currentTimeMillis();
+              if (timeLeft > 0) {
+                Thread.sleep(timeLeft);
+              }
+            } catch (InterruptedException ex) {
+              if (cancelRequest) {
+                // We are told to cancel the request
+                if (log.isDebugEnabled()) {
+                  log.debug("Request has been cancelled");
+                }
+                return;
+              }
+            } 
+            if (log.isInfoEnabled()) {
+              log.info("Start to request certificates from backup CA: " + infoURL);
+            }
+          }
+
+          checkOrMakeIdentity(info, requestURL);
+
+          return;
+        } catch (Exception ex) {
+          if (ex instanceof InterruptedException) {
+            // Operation cancelled. Should be a signal to shutdown...
+            if (cancelRequest) {
+              if (log.isDebugEnabled()) {
+                log.debug("Request has been cancelled");
+              }
+              return;
+            }
+            else {
+              if (log.isErrorEnabled()) {
+                log.error("Unexpected exception", ex);
+              }
+            }
+          }
+          else if (ex instanceof IOException) {
+            if (log.isDebugEnabled()) {
+              log.debug("Waiting to get trusted policy from " + infoURL);
+            }
+          }
+          else {
+            if (log.isWarnEnabled()) {
+              log.warn("Exception occurred. ", ex);
+            }
+            return;
+          }
+        }
+      }
+    }
   }
 
 }
