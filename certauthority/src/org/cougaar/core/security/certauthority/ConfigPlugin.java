@@ -33,6 +33,7 @@ import java.util.Hashtable;
 import java.util.Iterator;
 import java.util.List;
 
+import javax.net.ssl.SSLSocketFactory;
 import javax.security.auth.x500.X500Principal;
 
 import org.cougaar.core.component.BindingSite;
@@ -51,6 +52,7 @@ import org.cougaar.core.security.services.crypto.KeyRingService;
 import org.cougaar.core.security.services.crypto.CertificateRequestorService;
 import org.cougaar.core.security.services.util.ConfigParserService;
 import org.cougaar.core.security.services.util.SecurityPropertiesService;
+import org.cougaar.core.security.ssl.BasicSSLSocketFactory;
 import org.cougaar.core.security.util.NodeInfo;
 import org.cougaar.core.security.util.ServletRequestUtil;
 import org.cougaar.core.service.LoggingService;
@@ -87,7 +89,11 @@ public class ConfigPlugin
   public static String httpport = null;
   private String httpsport = null;
   private long pollStart;
-
+  /** Used to obtain the certificate of the CA when there is no prior trust
+   * relationship. This should be used only to run experiments, not in a deployed system.
+   */
+  private SSLSocketFactory noCheckSocketFactory;
+  
   public void setBindingSite(BindingSite bs) {
     bindingSite = bs;
   }
@@ -151,6 +157,7 @@ public class ConfigPlugin
   }
 
   private void init() {
+    noCheckSocketFactory = BasicSSLSocketFactory.getInstance();
     keyRingService = (KeyRingService)
       _sb.getService(this,
 					    KeyRingService.class,
@@ -338,7 +345,7 @@ public class ConfigPlugin
           Thread.sleep(waittime);
 
           ObjectInputStream ois = new ObjectInputStream(
-            new ServletRequestUtil().sendRequest(infoURL, "", waittime));
+            new ServletRequestUtil().sendRequest(infoURL, "", waittime, noCheckSocketFactory));
           // return a trusted policy for this plug to send PKCS request
           // also return a certificate to install in the trusted store
           // the certificate may not be the same as the one specified by
