@@ -464,13 +464,13 @@
        <if>
          <equals arg1="cvs.sticky.tag" arg2="" trim="true"/>
          <then>
-           <property name="cvs.sticky.tag.cmd" value="-r ${cvs.sticky.tag}"/>
+           <property name="cvs.sticky.tag.cmd" value=""/>
          </then>
          <else>
-           <property name="cvs.sticky.tag.cmd" value=""/>
+           <property name="cvs.sticky.tag.cmd" value="-r ${cvs.sticky.tag}"/>
          </else>
        </if>
-       <echo message="Checking out using tag: ${cvs.sticky.tag.cmd} ${cvs.sticky.tag}"/>
+       <echo message="Checking out using tag: ${cvs.sticky.tag.cmd}"/>
        <delete file="cvs.status.txt"/>
     </target>
 
@@ -522,7 +522,7 @@
             <property name="cvs.command" value="-Q checkout ${cvs.sticky.tag.cmd}"/>
           </else>
        </if>
-       <echo message="Updating or checking out: ${securityservices.base}/../${build.module.name}"/>
+       <echo message="Updating or checking out: ${securityservices.base}/../${build.module.name} using ${cvs.sticky.tag.cmd}"/>
        <cvs cvsRoot="${cvs.root}" cvsRsh="${env.CVS_RSH}"
             command="${cvs.command}" package="${build.module.name}"
             dest="${securityservices.base}/../"
