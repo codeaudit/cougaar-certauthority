@@ -840,8 +840,14 @@
     </target>
     
     <target name="upload-overlay">
-      <property name="overlay.zip.name" value="${project.name}-${anthill.branch.name}-${cougaar.branch.name}.zip"/>
-      <move file="${project.name}.zip" tofile="${overlay.zip.name}"/>
+      <if>
+        <isset property="webdav.url"/>
+        <then>
+          <property name="overlay.zip.name" value="${project.name}-${anthill.branch.name}-${cougaar.branch.name}.zip"/>
+          <echo message="Moving ${project.name}.zip to ${overlay.zip.name}"/>
+          <move file="${project.name}.zip" tofile="${overlay.zip.name}"/>
+        </then>
+      </if>
       <if>
         <isset property="webdav.url"/>
         <then>
