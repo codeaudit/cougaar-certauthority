@@ -1,0 +1,66 @@
+#!/usr/bin/ruby
+
+#This rule's purpose is to add the Configuration Manager plugins to the
+# appropriate plugin(s).  Also, the ConfigurationManagerInitPlugin's 
+# parameters are populated with the agent and node configuration used
+# as the ground truth for the configuration manager.  The "role" facet
+# is extracted from nodes to look for "role" = "$facetManagement" and added to the 
+# plugin parameters.  Also the "cm_role"
+# facet is extracted from agents and added to the plugin parameters.
+
+if ! defined? CIP
+  CIP = ENV['COUGAAR_INSTALL_PATH']
+end
+
+$:.unshift File.join(CIP, 'csmart', 'assessment', 'lib')
+
+require 'security/lib/common_security_rules'
+
+#agent role list
+agentlist =[]
+#node role list
+nodelist =[]
+#list of agents (identified with facets) to include the Configuration Manager in
+include_array=[$facetRootCaManagerAgent]
+theCMInitPlugin="org.cougaar.core.security.cm.ConfigurationManagerInitPlugin"
+theCMMessagePlugin="org.cougaar.core.security.cm.ConfigurationManagerMessagePlugin"
+
+society.each_agent(true) do |agent|
+  if agent.has_facet?("cm_role")
+    facet = agent.get_facet("cm_role")
+    #puts "#{agent.name} cm role: #{facet}"
+    agentlist.concat ["agent,#{agent.name}=#{facet}"]
+  end
+end
+
+society.each_node do |node|
+  if node.has_facet?("role")
+    facet=node.get_facet("role")
+    if facet==$facetManagement
+      #puts "#{node.name} has management role"
+      nodelist.concat ["node,#{node.name}=#{$facetManagement}"]
+    end
+  end
+end
+
+society.each_agent(true) do |agent|
+  include_array.each do |targetagentFacet|
+    #puts "#{targetagentFacet}"
+    agent.each_facet do |facet|
+      if facet == targetagentFacet
+        agent.add_component do |c|
+          c.classname=theCMInitPlugin
+          agentlist.each do |facet|
+            c.add_argument(facet)
+          end
+        end
+        nodelist.each do |facet|
+          c.add_argument(facet)
+        end
+      end
+      agent.add_component do |c|
+      	c.classname=theCMMessagePlugin
+      end
+    end
+  end
+end

@@ -1,0 +1,57 @@
+#!/usr/bin/ruby
+####################################################
+# enclave_ca_config_component.rule
+
+cahost = nil
+caHttpPort = nil
+caHttpsPort = nil
+rootCaAgentName = nil
+society.each_agent do |agent|
+  agent.each_facet(:role) do |facet|
+    if facet[:role] == $facetRootCaManagerAgent
+      rootCaAgentName = agent.name
+      cahost = agent.node.host.name 
+      caHttpPort = agent.node.cougaar_port
+      if (caHttpPort == nil)
+        raise "Unable to find HTTP port number of root CA"
+      end
+      caHttpsPort = agent.node.secure_cougaar_port
+      if (caHttpsPort == nil)
+        raise "Unable to find HTTPS port number of root CA"
+      end
+      # Root CA has been found. No need to continue to walk through list of agents
+      break
+    end
+  end
+end
+
+if cahost != nil
+  society.each_agent do |agent|
+    agent.each_facet(:role) do |facet|
+      if facet[:role] == $facetCaManagerAgent
+         enclave = agent.node.host.get_facet(:enclave).capitalize
+    
+         if enclave != nil
+           arg = 'CN=' + enclave + 'EnclaveCA, OU=' + enclave + 'Enclave' \
+             ', O=DLA, L=MV, ST=CA, C=US, T=ca'
+           if agent.node.agent.has_component?("org.cougaar.core.security.provider.SecurityComponentFactory")
+             # This is to ensure AutoConfigPlugin is installed AFTER SecurityComponentFactgory
+             agent.node.agent.add_component do |c|
+               c.name = enclave + "EnclaveCaConfigPlugin"
+               c.classname = "org.cougaar.core.security.certauthority.ConfigPlugin"
+               c.priority = "HIGH"
+               c.insertionpoint = "Node.AgentManager.Agent.SecurityComponent"
+               c.add_argument(arg)
+               c.add_argument("")
+               #  1st arg: host name where CA is running
+               #  2nd arg: Name of CA agent
+               #  3rd arg: HTTP port number of CA
+               #  4th arg: HTTPs port number of CA
+               c.add_argument(cahost + ":#{rootCaAgentName}:#{caHttpPort}:#{caHttpsPort}")
+            end
+          end
+        end
+      end
+    end
+  end
+end

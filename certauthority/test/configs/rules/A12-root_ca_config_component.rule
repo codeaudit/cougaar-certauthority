@@ -1,0 +1,24 @@
+#!/usr/bin/ruby
+####################################################
+# RootCAConfigComponent
+
+
+configPlugin = "org.cougaar.core.security.certauthority.ConfigPlugin"
+
+society.each_agent do |agent|
+  agent.each_facet(:role) do |facet|
+    if facet[:role] == $facetRootCaManagerAgent
+      if agent.node.agent.has_component?("org.cougaar.core.security.provider.SecurityComponentFactory")
+        # This is to ensure RootCAConfigPlugin is installed AFTER SecurityComponentFactgory
+        enclave = agent.node.host.get_facet(:enclave).capitalize
+        agent.node.agent.add_component do |c|
+          c.name = "RootCAConfigPlugin"
+          c.classname = configPlugin
+          c.priority = "HIGH"
+          c.insertionpoint = "Node.AgentManager.Agent.SecurityComponent"
+          c.add_argument("CN=RootCA, OU=Root, O=DLA, L=MV, ST=CA, C=US, T=ca")
+        end
+      end
+    end
+  end
+end

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<projectDescription>
+	<name>certauthority</name>
+	<comment></comment>
+	<projects>
+		<project>securityservices</project>
+		<project>securityutils</project>
+	</projects>
+	<buildSpec>
+		<buildCommand>
+			<name>org.eclipse.jdt.core.javabuilder</name>
+			<arguments>
+			</arguments>
+		</buildCommand>
+	</buildSpec>
+	<natures>
+		<nature>org.eclipse.jdt.core.javanature</nature>
+		<nature>com.cougaarsoftware.cougaar.ide.core.cougaarnature</nature>
+	</natures>
+</projectDescription>
