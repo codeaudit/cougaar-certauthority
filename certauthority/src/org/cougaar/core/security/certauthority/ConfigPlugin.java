@@ -337,7 +337,7 @@ extends SecurityComponent {
       Schedulable sched = threadService.getThread(this, t);
       sched.start();
       if (log.isDebugEnabled()) {
-        log.debug("Started CA request thread" + t.getInfoURL());
+        log.debug("Started CA request thread: " + t.getInfoURL());
       }
     }
     else {
