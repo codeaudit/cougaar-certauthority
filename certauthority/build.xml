@@ -139,6 +139,11 @@
           <pathelement location="${cougaar.install.path}/sys/log4j.jar"/>
       </path>
 
+      <dirname property="current.directory.name" file="${securityservices.base}/build.xml"/>
+      <echo level="info" message="${current.directory.name}"/>
+      <basename property="current.module.name" file="${current.directory.name}"/>
+      <!-- Set the property that contains the modules to build. -->
+      <property name="module.build.list" value="${module.subordinates},${current.module.name}"/>
     </target> 
 
     <target name="tstamp" depends="checkversion, ant-contrib-setup, init-prop">
@@ -409,6 +414,15 @@
         <echo message="#### Generated ZIP file"/>
         <!-- Upload result to web server -->
         <antcall target="upload-overlay"/>
+    </target>
+    <target name="security-overlay" depends="all">
+        <delete file="security-overlay.zip"/>
+        <for list="${module.build.list}" delimiter="," param="build.module.name">
+           <sequential>
+             <zip destfile="security-overlay.zip" update="true" basedir="${securityservices.base}/../@{build.module.name}/staging">
+             </zip>
+           </sequential>
+        </for>
     </target>
 
     <!-- The INSTALL target does everything but cvs-update and javadoc -->
@@ -733,11 +747,6 @@
     </target>
 
     <target name="interactive" depends="tstamp">
-       <dirname property="current.directory.name" file="${securityservices.base}/build.xml"/>
-       <echo level="info" message="${current.directory.name}"/>
-       <basename property="current.module.name" file="${current.directory.name}"/>
-       <!-- Set the property that contains the modules to build. -->
-       <property name="module.build.list" value="${module.subordinates},${current.module.name}"/>
 
        <echo level="info" message="***** Cougaar security services interactive build *****"/>
        <echo level="info" message="*******************************************************"/>
