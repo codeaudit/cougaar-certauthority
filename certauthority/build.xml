@@ -163,17 +163,17 @@
         <fail message="ant version 1.5 or above is required. Current version is ${ant.version}"
               if="ant.version.incorrect"/>
          -->
-        <property name="jdk.version.needed.1" value="1.4.2"/>
-        <property name="jdk.version.needed.2" value="1.5.0"/>
+        <property name="jdk.version.needed.142" value="1.4.2"/>
+        <property name="jdk.version.needed.150" value="1.5.0"/>
         <condition property="vm.version.incorrect" value="true">
           <not>
             <or>
-              <contains string="${java.vm.version}" substring="${jdk.version.needed.1}"/>
-              <contains string="${java.vm.version}" substring="${jdk.version.needed.2}"/>
+              <contains string="${java.vm.version}" substring="${jdk.version.needed.142}"/>
+              <contains string="${java.vm.version}" substring="${jdk.version.needed.150}"/>
             </or>
           </not>
         </condition>
-        <fail message="JDK ${jdk.version.needed.1} or ${jdk.version.needed.2} required. Current version is ${java.vm.version}"
+        <fail message="JDK ${jdk.version.needed.142} or ${jdk.version.needed.150} required. Current version is ${java.vm.version}"
               if="vm.version.incorrect"/>
     </target>
 
