@@ -94,7 +94,7 @@ import sun.security.x509.X509CertImpl;
  * DOCUMENT ME!
  *
  * @author $author$
- * @version $Revision: 1.2 $
+ * @version $Revision: 1.3 $
  */
 public class CertificateRequestor implements CertificateRequestorService {
   private ServiceBroker serviceBroker;
@@ -150,7 +150,8 @@ public class CertificateRequestor implements CertificateRequestorService {
     	role =secprop.getProperty(SecurityPropertiesService.SECURITY_ROLE);
     }
     if (role == null && log.isInfoEnabled() == true) {
-      log.info("Role is not defined");
+      log.info("Role is not defined. Setting empty role");
+      role = "";
     }
       try {
         String waitPoll = System.getProperty("org.cougaar.core.security.configpoll", "5000");
