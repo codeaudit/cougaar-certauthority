@@ -138,8 +138,6 @@
           <path refid="dependency.artifacts.dir.path"/>
           <pathelement location="${cougaar.install.path}/sys/log4j.jar"/>
       </path>
-      <property name="foobar1" refid="base.core.class.path"/>
-      <echo message="${foobar1}"/>
 
     </target> 
 
