@@ -449,25 +449,29 @@
             command="-q status -v build.xml"
             output="cvs.status.txt"
             failonerror="true"/>
-       <loadfile property="cvs.sticky.tag" srcFile="cvs.status.txt" failonerror="false">
+       <loadfile property="cvs.sticky.tag" srcFile="cvs.status.txt" failonerror="true">
          <filterchain>
            <linecontains>
              <contains value="Sticky Tag:"/>
            </linecontains>
-           <tokenfilter>
-             <!-- <stringtokenizer/> -->
-             <replaceregex pattern="Sticky Tag:\s*(\S*)\s*(\(.+\))" replace="\1"/>
-           </tokenfilter>
            <striplinebreaks/>
+           <tokenfilter>
+             <!-- Output format of sticky tag line when executing cvs status build.xml:
+                     Sticky Tag:          (none)
+                     Sticky Tag:          B11_2 (branch: 1.14.4)
+             -->
+             <trim/>
+             <replaceregex byline="true" pattern="Sticky Tag:\s+(\S*)\s*(\(.+?\))" replace="\1"/>
+           </tokenfilter>
          </filterchain>
        </loadfile>
        <if>
-         <equals arg1="cvs.sticky.tag" arg2="" trim="true"/>
+         <isset property="cvs.sticky.tag"/>
          <then>
-           <property name="cvs.sticky.tag.cmd" value=""/>
+           <property name="cvs.sticky.tag.cmd" value="-r ${cvs.sticky.tag}"/>
          </then>
          <else>
-           <property name="cvs.sticky.tag.cmd" value="-r ${cvs.sticky.tag}"/>
+           <property name="cvs.sticky.tag.cmd" value=""/>
          </else>
        </if>
        <echo message="Checking out using tag: ${cvs.sticky.tag.cmd}"/>
