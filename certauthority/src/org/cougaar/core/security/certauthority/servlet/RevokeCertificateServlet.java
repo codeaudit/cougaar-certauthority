@@ -307,17 +307,10 @@ extends HttpServlet
         {
           out.println(" got context as null");
         }
-      /*Enumeration enumn= context.getServletNames();
-        for(;enumn.hasMoreElements();)
+      Enumeration en = context.getAttributeNames();
+      while(en.hasMoreElements())
         {
-	String propname=(String)enumn.nextElement();
-       	out.println(" Got servlet  name :"+propname );
-        }
-      */
-      Enumeration enum = context.getAttributeNames();
-      while(enum.hasMoreElements())
-        {
-          String propname=(String)enum.nextElement();
+          String propname=(String)en.nextElement();
           out.println(" Got propert name :"+propname);
           log.debug(" Got propert name :"+propname);
           out.flush();
