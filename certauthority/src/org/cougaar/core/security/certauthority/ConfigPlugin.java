@@ -28,6 +28,8 @@ package org.cougaar.core.security.certauthority;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.security.cert.X509Certificate;
 import java.util.Hashtable;
 import java.util.Iterator;
@@ -545,6 +547,28 @@ extends SecurityComponent {
       isPrimaryCA = primaryCA;
       
       String cahost = param.substring(0, param.indexOf(':'));
+      if ("localhost".equalsIgnoreCase(cahost)) {
+        // This is most likely a one-host society. A society XML file
+        // has been created with host name set to "localhost" instead
+        // of the actual host name. This is typically used to build a
+        // portable sample society that works regardless of the actual
+        // host name.
+        // 
+        // The certificate requestor would try to connect to https://localhost...
+        // but that would fail because of a host mismatch in the SSL handshake.
+        // This is because the CA creates a certificate with the actual host name.
+        try {
+          cahost = InetAddress.getLocalHost().getHostName();
+          if (log.isDebugEnabled()) {
+            log.debug("Setting CA host name to " + cahost);
+          }
+        }
+        catch(UnknownHostException e) {
+          if (log.isWarnEnabled()) {
+            log.warn("Unable to resolve local host name", e);
+          }
+        }
+      }
       int agentindex = param.indexOf(':');
       String caagent = param.substring(agentindex+1, param.length());
       
