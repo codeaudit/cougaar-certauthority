@@ -865,6 +865,7 @@
           <isset property="webdav.url"/>
           <isset property="anthill.branch.name"/>
       	  <isset property="cougaar.branch.name"/>
+      	  <isset property="overlay.zip.name"/>
         </and>
         <then>
           <echo message="Uploading ${overlay.zip.name} to ${webdav.url}"/>
@@ -873,10 +874,6 @@
                <include name="${overlay.zip.name}"/>
             </fileset>
           </davput>
-          <!-- Rename resource. The resource is name as:
-               ${project.name}-${project.branch}-${cougaar.branch} -->
-          <davmove url="${webdav.url}/${overlay.zip.name}" overwrite="true"
-                   destination="${webdav.url}/${overlay.zip.name}"/>
         </then>
       </if>
       <if>
