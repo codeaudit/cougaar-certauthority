@@ -111,7 +111,12 @@ public class PendingCertCache
     throws Exception {
     caDN = caPolicy.caDnName.getName();
 
-    nodeConfiguration = new NodeConfiguration(caDN, serviceBroker);
+    AccessController.doPrivileged(new PrivilegedAction() {
+      public Object run() {
+        nodeConfiguration = new NodeConfiguration(caDN, serviceBroker);
+        return null;
+      }
+    });
     
     if (log.isDebugEnabled()) {
       log.debug("PendingCertCache: Top level directory is :"
