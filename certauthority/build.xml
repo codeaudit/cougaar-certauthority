@@ -66,14 +66,16 @@
         <isset property="anthill.dependency.artifacts.dir"/>
         <then>
           <echo message="Anthill build - Using JAR files from ${anthill.dependency.artifacts.dir}"/>
-          <path id="dependency.artificats.dir.path">    
+          <path id="dependency.artifacts.dir.path">    
             <fileset dir="${anthill.dependency.artifacts.dir}">
               <include name="*.jar"/>
             </fileset>
           </path>
+          <property name="foobar" refid="dependency.artifacts.dir.path"/>
+          <echo message="${foobar}"/>
         </then>
         <else>
-          <path id="dependency.artificats.dir.path">    
+          <path id="dependency.artifacts.dir.path">    
           </path>
         </else>
       </if>
@@ -123,7 +125,7 @@
 
       <!-- Base class path -->
       <path id="base.core.class.path">    
-          <path refid="dependency.artificats.dir.path"/>
+          <path refid="dependency.artifacts.dir.path"/>
           <pathelement location="${cougaar.install.path}/sys/log4j.jar"/>
       </path>
 
