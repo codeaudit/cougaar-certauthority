@@ -50,6 +50,8 @@ import org.cougaar.core.security.services.util.SecurityPropertiesService;
 import org.cougaar.core.security.util.SecurityServletSupport;
 import org.cougaar.core.service.LoggingService;
 import org.cougaar.core.service.identity.AgentIdentityService;
+import org.cougaar.core.security.policy.CryptoClientPolicy;
+import org.cougaar.core.security.policy.SecurityPolicy;
 
 public class CreateCaKeyServlet
   extends  HttpServlet
@@ -136,24 +138,39 @@ public class CreateCaKeyServlet
       return;
     }
     */
+    SecurityPolicy[] sp =
+      configParser.getSecurityPolicies(CryptoClientPolicy.class);
+    final CryptoClientPolicy cryptoClientPolicy = (CryptoClientPolicy) sp[0];
 
-    X500Principal p = new X500Principal(caDN);
-    agentIdentity = (AgentIdentityService)
-      support.getServiceBroker().getService(new CAIdentityClientImpl(p),
+    generateCaPolicy(attributeTable);
+
+    final X500Principal p = new X500Principal(caDN);
+    AccessController.doPrivileged(new PrivilegedAction() {
+      public Object run() {
+        configParser.updateSecurityPolicy(cryptoClientPolicy);
+        agentIdentity = (AgentIdentityService)
+          support.getServiceBroker().getService(new CAIdentityClientImpl(p),
 					    AgentIdentityService.class,
-					    null);
-    try {
-      agentIdentity.acquire(null);
-    }
-    catch (Exception e) {
-      out.println("Unable to generate CA key: " + e);
+       					    null);
+        try {
+          agentIdentity.acquire(null);
+        } catch (Exception e) {
+          if (log.isWarnEnabled()) {
+            log.warn("Unable to generate CA key ", e);
+          }
+        }
+        return null;
+      }
+    });
+
+/*
+      out.println("Unable to generate CA key ", e);
       e.printStackTrace(out);
       out.flush();
       out.close();
       return;
-    }
+*/
 
-    generateCaPolicy(attributeTable);
 
     out.println("<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0 Transitional//EN\">");
     out.println("<html>");
@@ -172,10 +189,15 @@ public class CreateCaKeyServlet
     out.close();
   }
 
-  private void generateCaPolicy(Hashtable attributeTable) {
+  private void generateCaPolicy(final Hashtable attributeTable) {
+    AccessController.doPrivileged(new PrivilegedAction() {
+      public Object run() {
     PolicyHandler ph = new PolicyHandler(configParser,
 					 support.getServiceBroker());
     ph.addCaPolicy(attributeTable);
+        return null;
+      }
+    });
   }
 
   private void doCaForm(HttpServletRequest req,HttpServletResponse res)
