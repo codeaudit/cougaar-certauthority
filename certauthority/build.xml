@@ -19,6 +19,13 @@
 
     <dirname property="imported.basedir" file="${ant.file.imported}"/>
     <property file="${imported.basedir}/build.properties"/>
+    <!-- Load additional properties which are used to upload
+         project artifacts to a web server and perform tests.
+         Properties stored in that file should be:
+         - webdav.url: The URL where to upload the overlay ZIP file.
+            For example, webdav.url=http://panther3.va.cougaarsoftware.com:8080/webdav/cougaar
+    -->
+    <property file="${user.home}/anthill.properties"/>
 
     <!-- <echo message="Loaded ${imported.basedir}/build.properties: ${module.superiors}"/> -->
     <!-- The name of a custom build file -->
@@ -30,6 +37,13 @@
         <taskdef resource="net/sf/antcontrib/antcontrib.properties">
           <classpath>
              <pathelement location="${securityservices.base}/build/lib/ant-contrib-1.0b1.jar"/>
+          </classpath>
+        </taskdef>
+        <taskdef resource="org/apache/webdav/ant/taskdefs.properties">
+          <classpath>
+             <fileset dir="${securityservices.base}/build/lib">
+                <include name="*.jar"/>
+             </fileset>
           </classpath>
         </taskdef>
         <property name="ant.contrib.ext.loaded" value="true"/>
@@ -49,10 +63,11 @@
              mechanism you are using for your build.
       -->
       <if>
-        <isset property="dependency.artifacts.dir"/>
+        <isset property="anthill.dependency.artifacts.dir"/>
         <then>
+          <echo message="Anthill build - Using JAR files from ${anthill.dependency.artifacts.dir}"/>
           <path id="dependency.artificats.dir.path">    
-            <fileset dir="${dependency.artifacts.dir}">
+            <fileset dir="${anthill.dependency.artifacts.dir}">
               <include name="*/*.jar"/>
             </fileset>
           </path>
@@ -62,12 +77,6 @@
           </path>
         </else>
       </if>
-
-      <!-- Base class path -->
-      <path id="base.core.class.path">    
-          <pathelement location="${cougaar.install.path}/sys/log4j.jar"/>
-          <path refid="dependency.artificats.dir.path"/>
-      </path>
 
       <!-- prefix for all environment variables -->
       <property environment="env"/>
@@ -89,15 +98,19 @@
       <!-- The base directories where the regression test result files are located -->
       <property name="securityservices.results" value="${securityservices.regress}${file.separator}results"/>
 
+      <!--
+      <echo message="Dumping properties..."/>
+      <echoproperties/>
+      -->
       <if>
         <isset property="anthill.cougaar.branch.name"/>
         <then>
           <!-- For anthill integration -->
           <!-- The branch name of the Cougaar Standard Edition -->
-          <property name="branch.name" value="${anthill.cougaar.branch.name}"/>
+          <property name="cougaar.branch.name" value="${anthill.cougaar.branch.name}"/>
           <!-- The parent directory of org.cougaar.install.path -->
           <property name="org.cougaar.install.path.parent" value="${user.home}/nightly-cougaar"/>
-          <property name="cougaar.install.path" value="${org.cougaar.install.path.parent}/${branch.name}/cip"/>
+          <property name="cougaar.install.path" value="${org.cougaar.install.path.parent}/${cougaar.branch.name}/cip"/>
           <mkdir dir="${cougaar.install.path}"/>
           <property name="cougaar.workspace" value="${cougaar.install.path}/workspace"/>
         </then>
@@ -107,6 +120,13 @@
         </else>
       </if>
       <echo message="CIP=${cougaar.install.path}"/>
+
+      <!-- Base class path -->
+      <path id="base.core.class.path">    
+          <path refid="dependency.artificats.dir.path"/>
+          <pathelement location="${cougaar.install.path}/sys/log4j.jar"/>
+      </path>
+
     </target> 
 
     <target name="tstamp" depends="checkversion, ant-contrib-setup, init-prop">
@@ -269,10 +289,10 @@
          </fileset>
         </copy>
         <if>
-          <isset property="artifacts.dir"/>
+          <isset property="anthill.artifacts.dir"/>
           <then>
             <echo message="Copying jar files to anthill artifact repository..."/>
-             <copy todir="${artifacts.dir}">
+             <copy todir="${anthill.artifacts.dir}">
                 <fileset dir="${securityservices.base}/output/signed">
                   <patternset>
                      <include name="*.jar"/>
@@ -360,6 +380,8 @@
      	<echo message="#### Building Zip file"/>
 	<zip zipfile="${project.name}.zip" basedir="staging"/>	
         <echo message="#### Generated ZIP file"/>
+        <!-- Upload result to web server -->
+        <antcall target="upload-overlay"/>
     </target>
 
     <!-- The INSTALL target does everything but cvs-update and javadoc -->
@@ -779,6 +801,23 @@
         excludes="**/CVS"/>
     </target>
     
+    <target name="upload-overlay">
+      <if>
+        <isset property="webdav.url"/>
+        <then>
+          <echo message="Uploading ${project.name}.zip to ${webdav.url}"/>
+          <davput url="${webdav.url}" verbose="true" overwrite="true">
+            <fileset dir="${securityservices.base}">
+               <include name="${project.name}.zip"/>
+            </fileset>
+          </davput>
+          <!-- Rename resource. The resource is name as:
+               ${project.name}-${project.branch}-${cougaar.branch} -->
+          <davmove url="${webdav.url}/${project.name}.zip" overwrite="true"
+                   destination="${webdav.url}/${project.name}-${anthill.branch.name}-${cougaar.branch.name}.zip"/>
+        </then>
+      </if>
+    </target>
 </project>
 
 <!-- End Cougaar securityservices ant build script -->
