@@ -19,6 +19,7 @@
 
     <dirname property="imported.basedir" file="${ant.file.imported}"/>
     <property file="${imported.basedir}/build.properties"/>
+
     <!-- Load additional properties which are used to upload
          project artifacts to a web server and perform tests.
          Properties stored in that file should be:
@@ -71,8 +72,6 @@
               <include name="*.jar"/>
             </fileset>
           </path>
-          <property name="foobar" refid="dependency.artifacts.dir.path"/>
-          <echo message="${foobar}"/>
         </then>
         <else>
           <path id="dependency.artifacts.dir.path">    
@@ -438,29 +437,15 @@
     <target name="install-and-update-superiors" depends="install, update-superiors">
     </target>
 
-    <!-- Check out (or update if module has already been checked out) a security services module
-         The name of the module should be provided in the "build.module.name" property. -->
-    <target name="update-module">
-       <!-- First, determine what the CVSROOT should be. Try to get it from the CVS/Root file,
-            otherwise get it from the CVSROOT environment variable. -->
-       <loadfile property="cvs.root.from.file" srcFile="CVS/Root" failonerror="false">
+    <target name="obtain-branch-name">
+       <!-- If the installer module was checked out with a sticky tag, then
+            use that tag to check out other modules. -->
+       <loadfile property="installer.cvs.root" srcFile="CVS/Root" failonerror="false">
          <filterchain>
            <striplinebreaks/>
          </filterchain>
        </loadfile>
-       <condition property="cvs.root" value="${cvs.root.from.file}">
-         <isset property="cvs.root.from.file"/>
-       </condition>
-       <condition property="cvs.root" value="${env.CVSROOT}">
-         <not>
-           <isset property="cvs.root"/>
-         </not>
-       </condition>
-       <echo message="CVSROOT: ${cvs.root}"/>
-
-       <!-- If the installer module was checked out with a sticky tag, then
-            use that tag to check out other modules. -->
-       <cvs cvsRoot="${cvs.root}" cvsRsh="${env.CVS_RSH}"
+       <cvs cvsRoot="${installer.cvs.root}" cvsRsh="${env.CVS_RSH}"
             command="-q status -v build.xml"
             output="cvs.status.txt"
             failonerror="true"/>
@@ -480,12 +465,50 @@
          <equals arg1="cvs.sticky.tag" arg2="" trim="true"/>
          <then>
            <property name="cvs.sticky.tag.cmd" value="-r ${cvs.sticky.tag}"/>
-           <echo message="Checking out using tag: ${cvs.sticky.tag.cmd}"/>
          </then>
          <else>
            <property name="cvs.sticky.tag.cmd" value=""/>
          </else>
        </if>
+       <echo message="Checking out using tag: ${cvs.sticky.tag.cmd} ${cvs.sticky.tag}"/>
+       <delete file="cvs.status.txt"/>
+    </target>
+
+    <!-- Check out (or update if module has already been checked out) a security services module
+         The name of the module should be provided in the "build.module.name" property. -->
+    <target name="update-module">
+       <!-- First, determine what the CVSROOT should be.
+            1) Get it from a cvsroot.${project.name}.properties file
+            2) Try to get it from the CVS/Root file,
+            3) otherwise get it from the CVSROOT environment variable. -->
+       <echo message="Loading CVSROOT from cvsroot.${build.module.name}.properties"/>
+       <loadfile property="cvs.root" srcFile="cvsroot.${build.module.name}.properties" failonerror="false">
+         <filterchain>
+           <striplinebreaks/>
+           <expandproperties/>
+         </filterchain>
+       </loadfile>
+       <if>
+         <not>
+           <isset property="cvs.root"/>
+         </not>
+         <then>
+           <loadfile property="cvs.root" srcFile="CVS/Root" failonerror="false">
+             <filterchain>
+               <striplinebreaks/>
+             </filterchain>
+           </loadfile>
+         </then>
+       </if>
+       <if>
+         <not>
+           <isset property="cvs.root"/>
+         </not>
+         <then>
+           <property name="cvs.root" value="${env.CVSROOT}"/>
+         </then>
+       </if>
+       <echo message="CVSROOT: ${cvs.root}"/>
 
        <!-- Set the CVS update or checkout command -->
        <if>
@@ -510,6 +533,8 @@
     <target name="process-interactive-command">
        <switch value="${build.choice}">
          <case value="1">
+           <!-- First, obtain the branch name of the installer module -->
+           <antcallback target="obtain-branch-name" return="cvs.sticky.tag.cmd"/>
            <!-- Update modules -->
            <foreach list="${module.build.list}" delimiter="," target="update-module"
                     param="build.module.name" inheritall="true">
@@ -535,6 +560,8 @@
            </foreach>
          </case>
          <case value="4">
+           <!-- First, obtain the branch name of the installer module -->
+           <antcallback target="obtain-branch-name" return="cvs.sticky.tag.cmd"/> 
            <!-- Update and build modules. -->
            <foreach list="${module.build.list}" delimiter="," target="update-module"
                     param="build.module.name" inheritall="true">
@@ -545,6 +572,8 @@
            </foreach>
          </case>
          <case value="5">
+           <!-- First, obtain the branch name of the installer module -->
+           <antcallback target="obtain-branch-name" return="cvs.sticky.tag.cmd"/>
            <!-- Update, build and install modules. -->
            <foreach list="${module.build.list}" delimiter="," target="update-module"
                     param="build.module.name" inheritall="true">
@@ -820,6 +849,15 @@
                ${project.name}-${project.branch}-${cougaar.branch} -->
           <davmove url="${webdav.url}/${project.name}.zip" overwrite="true"
                    destination="${webdav.url}/${project.name}-${anthill.branch.name}-${cougaar.branch.name}.zip"/>
+        </then>
+      </if>
+      <if>
+        <isset property="cougaarforge.upload"/>
+        <then>
+          <echo message="Uploading ${project.name}.zip to cougaarforge"/>
+          <scp file="${securityservices.base}/${project.name}.zip"
+               todir="${env.USER}@securitycore.cougaar.org:/var/www/gforge-projects/securitycore/auto/${anthill.branch.name}-${cougaar.branch.name}"
+               keyfile="${user.home}/.ssh/id_rsa"/>
         </then>
       </if>
     </target>
