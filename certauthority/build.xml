@@ -741,7 +741,7 @@
     </target>
 	
     <!-- Delete the ant-generated and $CIP/workspace directory -->
-    <target name="clean">
+    <target name="clean" depends="init-prop">
         <echo message="+++++ Cleaning environment"/>
         <delete dir="${securityservices.classes}"          includeEmptyDirs="true" quiet="true"/>
         <delete dir="${securityservices.output}"           includeEmptyDirs="true" quiet="true"/>
