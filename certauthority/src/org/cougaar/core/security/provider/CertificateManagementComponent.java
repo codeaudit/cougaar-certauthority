@@ -44,6 +44,11 @@ public final class CertificateManagementComponent
   protected BindingSite bindingSite = null;
   private LoggingService log;
   private String mySecurityCommunity;
+  private ServiceBroker serviceBroker;
+  private ServiceBroker rootServiceBroker;
+  private CryptoPolicyService cps;
+  private CertificateManagementServiceProvider certMgrSP;
+  private CertificateRequestorServiceProvider crsp;
 
   public CertificateManagementComponent() {
   }
@@ -76,10 +81,6 @@ public final class CertificateManagementComponent
     bindingSite = bs;
   }
 
-  ServiceBroker serviceBroker;
-  ServiceBroker rootServiceBroker;
-  CryptoPolicyService cps;
-
   public void load() {
     super.load();
     setLoggingService();
@@ -97,6 +98,7 @@ public final class CertificateManagementComponent
       if (rootServiceBroker == null) {
         throw new RuntimeException("Unable to get root service broker");
       }
+      serviceBroker.releaseService(this, NodeControlService.class, nodeControlService);
     }
     else {
       // We are running outside a Cougaar node.
@@ -130,14 +132,12 @@ public final class CertificateManagementComponent
   }
 
   private void registerServices() {
-    CertificateManagementServiceProvider ssp = 
-    	new CertificateManagementServiceProvider(serviceBroker, mySecurityCommunity);
-    rootServiceBroker.addService(CertificateManagementService.class, ssp);
+    certMgrSP = new CertificateManagementServiceProvider(serviceBroker, mySecurityCommunity);
+    rootServiceBroker.addService(CertificateManagementService.class, certMgrSP);
     if (log.isDebugEnabled()) {
     	log.debug("CertificateManagementService started");
     }
-    CertificateRequestorServiceProvider crsp = 
-    	new CertificateRequestorServiceProvider(serviceBroker, mySecurityCommunity);
+    crsp = new CertificateRequestorServiceProvider(serviceBroker, mySecurityCommunity);
     rootServiceBroker.addService(CertificateRequestorService.class, crsp);
     if (log.isDebugEnabled()) {
     	log.debug("CertificateRequestorService started");
@@ -148,10 +148,30 @@ public final class CertificateManagementComponent
   public void setState(Object loadState) {}
   public Object getState() {return null;}
 
-  public synchronized void unload() {
-    super.unload();
+  public synchronized void stop() {
+    super.stop();
     // unload services in reverse order of "load()"
     ServiceBroker sb = bindingSite.getServiceBroker();
-    // release services
+    
+    if (crsp != null) {
+      rootServiceBroker.revokeService(CertificateRequestorService.class, crsp);
+      crsp = null;
+    }
+    if (certMgrSP != null) {
+      rootServiceBroker.revokeService(CertificateManagementService.class, certMgrSP);
+      certMgrSP = null;
+    }
+    if (cps != null) {
+      sb.releaseService(this, CryptoPolicyService.class, cps);
+      cps = null;
+    }
+    
+    // release LoggingService
+    if (log != null) {
+      sb.releaseService(this, LoggingService.class, log);
+      log = null;
+    }
+    serviceBroker = null;
+    rootServiceBroker = null;
   }
 }
