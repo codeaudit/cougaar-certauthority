@@ -34,6 +34,7 @@ import org.cougaar.core.security.certauthority.KeyManagement;
 import org.cougaar.core.security.services.crypto.CertificateManagementService;
 import org.cougaar.core.security.services.crypto.CertificateManagementServiceClient;
 import org.cougaar.core.security.services.crypto.KeyRingService;
+import org.cougaar.core.service.LoggingService;
 
 public class CertificateManagementServiceProvider 
   extends BaseSecurityServiceProvider
@@ -57,6 +58,9 @@ public class CertificateManagementServiceProvider
 						    Object requestor, 
 						    Class serviceClass) {
     CertificateManagementService cms = null;
+    log = (LoggingService) serviceBroker.getService(this, LoggingService.class,
+        null);
+
     if (requestor instanceof CertificateManagementServiceClient) {
       String caDN = ((CertificateManagementServiceClient)requestor).getCaDN();
       if (caDN == null) {
