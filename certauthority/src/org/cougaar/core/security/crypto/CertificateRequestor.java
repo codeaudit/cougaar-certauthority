@@ -61,6 +61,8 @@ import java.util.Collection;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
+import java.security.PrivilegedAction;
+import java.security.AccessController;
 
 import org.cougaar.core.component.ServiceBroker;
 import org.cougaar.core.security.naming.CACertificateEntry;
@@ -92,12 +94,14 @@ import sun.security.x509.X509CertImpl;
  * DOCUMENT ME!
  *
  * @author $author$
- * @version $Revision: 1.1 $
+ * @version $Revision: 1.2 $
  */
 public class CertificateRequestor implements CertificateRequestorService {
   private ServiceBroker serviceBroker;
   private ConfigParserService configParser;
   private CryptoClientPolicy cryptoClientPolicy;
+  private CertificateCacheService cacheservice;
+  private KeyRingService keyRing;
   private LoggingService log;
   private String role;
 
@@ -120,6 +124,11 @@ public class CertificateRequestor implements CertificateRequestorService {
    */
   public CertificateRequestor(ServiceBroker sb) {
     serviceBroker = sb;
+
+    cacheservice = (CertificateCacheService) serviceBroker
+      .getService(this, CertificateCacheService.class, null);
+    keyRing = (KeyRingService) serviceBroker.getService(this,
+            KeyRingService.class, null);
     configParser = (ConfigParserService)serviceBroker.getService(this,
 				 ConfigParserService.class,
 				 null);
@@ -187,8 +196,6 @@ public class CertificateRequestor implements CertificateRequestorService {
     boolean isCACert, TrustedCaPolicy trustedCaPolicy) {
     String request = "";
     String reply = "";
-    CertificateCacheService cacheservice = (CertificateCacheService) serviceBroker
-      .getService(this, CertificateCacheService.class, null);
 
     if (cacheservice == null) {
       if(log.isWarnEnabled()){
@@ -330,12 +337,9 @@ public class CertificateRequestor implements CertificateRequestorService {
         }
 
         List nodex509List = null;
-        KeyRingService keyRing = (KeyRingService) serviceBroker.getService(this,
-            KeyRingService.class, null);
         if (keyRing != null) {
           nodex509List = keyRing.findCert(nodex500name,
               KeyRingService.LOOKUP_KEYSTORE, true);
-          serviceBroker.releaseService(keyRing, KeyRingService.class, null);
         }        
 
         X509Certificate nodex509 = null;
@@ -411,11 +415,6 @@ public class CertificateRequestor implements CertificateRequestorService {
     if (log.isDebugEnabled()) {
       log.debug("Creating cert on CA: " + dname.toString() + " : " + keyAlias);
     }
-
-    CertificateCacheService cacheservice = (CertificateCacheService) serviceBroker
-      .getService(this, CertificateCacheService.class, null);
-    KeyRingService keyRing = (KeyRingService) serviceBroker.getService(this,
-        KeyRingService.class, null);
 
     if (cacheservice == null) {
       if (log.isWarnEnabled()) {
@@ -510,11 +509,7 @@ public class CertificateRequestor implements CertificateRequestorService {
   private PrivateKey addCAKeyPair(X500Name dname, String keyAlias) {
     String alias = null;
     PrivateKey privatekey = null;
-    CertificateCacheService cacheservice = (CertificateCacheService) serviceBroker
-      .getService(this, CertificateCacheService.class, null);
-    KeyRingService keyRing = (KeyRingService) serviceBroker.getService(this,
-        KeyRingService.class, null);
-
+    
     if (cacheservice == null) {
       if (log.isWarnEnabled()) {
         log.warn("Unable to get Certificate Cache service in addCAKeyPair");
@@ -899,9 +894,6 @@ synchronized (_pkcsLock) {
       InvalidKeyException, KeyStoreException, UnrecoverableKeyException {
     PublicKey pk = certificate.getPublicKey();
     PKCS10 request = new PKCS10(pk);
-    CertificateCacheService cacheservice = (CertificateCacheService) serviceBroker
-      .getService(this, CertificateCacheService.class, null);
-
     if (cacheservice == null) {
       log.warn(
         " unabale to get Certificate Cache Service in generatePKCS10Reques");
@@ -1031,9 +1023,6 @@ synchronized (_pkcsLock) {
 
   private PrivateKey processPkcs7Reply(String alias, String reply) {
     PrivateKey privatekey = null;
-    CertificateCacheService cacheservice = (CertificateCacheService) serviceBroker
-      .getService(this, CertificateCacheService.class, null);
-
     if (cacheservice == null) {
       if (log.isWarnEnabled()) {
         log.warn("Unable to get Certificate cache Service in processPkcs7Reply");
@@ -1143,10 +1132,7 @@ synchronized (_pkcsLock) {
     X509Certificate[] certificateReply = new X509Certificate[0];
     certificateReply = (X509Certificate[]) collection.toArray(certificateReply);
 
-    KeyRingService keyRing = (KeyRingService)serviceBroker.getService(
-    		this, KeyRingService.class, null);
     keyRing.installCertificate(alias, certificateReply);
-    serviceBroker.releaseService(keyRing, KeyRingService.class, null);
   }
 
 
@@ -1164,9 +1150,6 @@ synchronized (_pkcsLock) {
   public String makeKeyPair(X500Name dname, boolean isCACert,
     CertificateAttributesPolicy certAttribPolicy)
     throws Exception {
-    CertificateCacheService cacheservice = (CertificateCacheService) serviceBroker
-      .getService(this, CertificateCacheService.class, null);
-
     if (cacheservice == null) {
       if (log.isWarnEnabled()) {
         log.warn("Unable to get Certificate cache Service in makeKeyPair");
@@ -1206,10 +1189,7 @@ synchronized (_pkcsLock) {
       }
     }
 
-    KeyRingService keyRing = (KeyRingService)serviceBroker.getService(
-    		this, KeyRingService.class, null);
     String alias = keyRing.getNextAlias(commonName);
-    serviceBroker.releaseService(keyRing, KeyRingService.class, null);
     if (log.isDebugEnabled()) {
       log.debug("Make key pair:" + alias + ":" + dname.toString());
     }
@@ -1236,8 +1216,6 @@ synchronized (_pkcsLock) {
     int keysize = certAttribPolicy.keysize;
     String sigAlgName = certAttribPolicy.sigAlgName;
     long howLong = certAttribPolicy.howLong;
-    CertificateCacheService cacheservice = (CertificateCacheService) serviceBroker
-      .getService(this, CertificateCacheService.class, null);
 
     if (cacheservice == null) {
       if (log.isWarnEnabled()) {
@@ -1347,10 +1325,6 @@ synchronized (_pkcsLock) {
     X509Certificate nodex509 = null;
     String request = "";
     String reply = "";
-    CertificateCacheService cacheservice = (CertificateCacheService) serviceBroker
-      .getService(this, CertificateCacheService.class, null);
-    KeyRingService keyRing = (KeyRingService) serviceBroker.getService(this,
-        KeyRingService.class, null);
 
     if (cacheservice == null) {
       if (log.isWarnEnabled()) {
