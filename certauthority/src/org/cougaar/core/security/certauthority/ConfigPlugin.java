@@ -22,14 +22,13 @@
  *  
  * </copyright> 
  */ 
- 
+
 
 package org.cougaar.core.security.certauthority;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.security.cert.X509Certificate;
-import java.util.ArrayList;
 import java.util.Hashtable;
 import java.util.Iterator;
 import java.util.List;
@@ -74,7 +73,7 @@ import sun.security.x509.X500Name;
  *
  */
 public class ConfigPlugin
-  extends SecurityComponent {
+extends SecurityComponent {
   //extends ComponentPlugin {
   /**
    */
@@ -86,7 +85,7 @@ public class ConfigPlugin
   protected CertificateCacheService cacheservice;
   protected CertificateRequestorService certRequestor;
   protected BindingSite bindingSite;
-
+  
   private String caDN = null;
   private String ldapURL = null;
   private String upperCA = null;
@@ -102,7 +101,8 @@ public class ConfigPlugin
    * A List<CARequestThread> of outstanding Threads
    */
   private Stack caRequestThreads;
-
+  private ThreadService threadService;
+  
   public ConfigPlugin() {
     caRequestThreads = new Stack();
   }
@@ -110,78 +110,105 @@ public class ConfigPlugin
   public void setBindingSite(BindingSite bs) {
     bindingSite = bs;
   }
-
+  
   public void setState(Object loadState) {}
   public Object getState() {return null;}
-
+  
   public void load() {
     super.load();
     _sb = bindingSite.getServiceBroker();
-
+    
     log = (LoggingService) _sb.getService(this, LoggingService.class, null);
-
+    
     configParser = (ConfigParserService)
-      _sb.getService(this,
-	ConfigParserService.class, null);
+    _sb.getService(this,
+        ConfigParserService.class, null);
     certRequestor = (CertificateRequestorService)
-      _sb.getService(this,
-	CertificateRequestorService.class, null);
-    if (configParser == null || certRequestor == null) {
+    _sb.getService(this,
+        CertificateRequestorService.class, null);
+    threadService = (ThreadService)_sb.getService(this, ThreadService.class, null);
+
+    if (configParser == null || certRequestor == null || threadService == null) {
       addServiceAvailableListener(); 
     }
     else {
       init();
     }
   }
-
+  
   private void addServiceAvailableListener() {
     _sb.addServiceListener(new ServiceAvailableListener() {
-    public void serviceAvailable(ServiceAvailableEvent ae) {
-      Class sc = ae.getService();
-      if (sc == CertificateRequestorService.class && certRequestor == null) {
-        certRequestor = (CertificateRequestorService)
+      /* (non-Javadoc)
+       * @see org.cougaar.core.component.ServiceAvailableListener#serviceAvailable(org.cougaar.core.component.ServiceAvailableEvent)
+       */
+      public void serviceAvailable(ServiceAvailableEvent ae) {
+        Class sc = ae.getService();
+        if (CertificateRequestorService.class.isAssignableFrom(sc) && certRequestor == null) {
+          certRequestor = (CertificateRequestorService)
           _sb.getService(this,
-            CertificateRequestorService.class, null);
-        if (log.isDebugEnabled()) {
-          log.debug("Certificate Requestor Service available");
+              CertificateRequestorService.class, null);
+          if (log.isDebugEnabled()) {
+            log.debug("Certificate Requestor Service available");
+          }
+        }
+        if (ConfigParserService.class.isAssignableFrom(sc) && configParser == null) {
+          configParser = (ConfigParserService)
+          _sb.getService(this,
+              ConfigParserService.class, null);
+          if (log.isDebugEnabled()) {
+            log.debug("Config Parser Service available");
+          }
+        }  
+        if (ThreadService.class.isAssignableFrom(sc) && threadService == null) {
+          threadService = (ThreadService)
+            _sb.getService(this, ThreadService.class, null);
+          if (log.isDebugEnabled()) {
+            log.debug("Thread Service available");
+          }
+          synchronized(caRequestThreads) {
+            Iterator it = caRequestThreads.iterator();
+            while (it.hasNext()) {
+              CARequestThread t = (CARequestThread)it.next();
+              if (!t.isThreadStartRequested()) {
+                if (log.isDebugEnabled()) {
+                  log.debug("Starting CARequestThread: " + t.getInfoURL());
+                }
+                t.setThreadStartRequested(true);
+                Schedulable sched = threadService.getThread(this, t);
+                sched.start();
+              }
+            }
+          }
+        }
+        if (configParser != null && certRequestor != null && threadService != null
+            && keyRingService == null) {
+          init();
         }
       }
-      if (sc == ConfigParserService.class && configParser == null) {
-        configParser = (ConfigParserService)
-          _sb.getService(this,
-            ConfigParserService.class, null);
-        if (log.isDebugEnabled()) {
-          log.debug("Config Parser Service available");
-        }
-      }  
-      if (configParser != null && certRequestor != null && keyRingService == null) {
-        init();
-      }
-    }
     });
   }
-
+  
   private void init() {
     noCheckSocketFactory = BasicSSLSocketFactory.getInstance();
     keyRingService = (KeyRingService)
-      _sb.getService(this,
-					    KeyRingService.class,
-					    null);
-/*
-    if (configParser == null) {
-      String s = "Unable to get config parser service. This is probably due to a configuration issue";
-      log.error(s);
-      throw new RuntimeException(s);
-    }
-*/
+    _sb.getService(this,
+        KeyRingService.class,
+        null);
+    /*
+     if (configParser == null) {
+     String s = "Unable to get config parser service. This is probably due to a configuration issue";
+     log.error(s);
+     throw new RuntimeException(s);
+     }
+     */
     cacheservice=(CertificateCacheService)
-        _sb.getService(this, CertificateCacheService.class, null);
+    _sb.getService(this, CertificateCacheService.class, null);
     SecurityPropertiesService sps = (SecurityPropertiesService)
-      _sb.getService(this, SecurityPropertiesService.class, null);
+    _sb.getService(this, SecurityPropertiesService.class, null);
     SecurityPolicy[] sp =
       configParser.getSecurityPolicies(CryptoClientPolicy.class);
     cryptoClientPolicy = (CryptoClientPolicy) sp[0];
-
+    
     try {
       httpport = Integer.parseInt(sps.getProperty("org.cougaar.lib.web.http.port", null));
     }
@@ -208,36 +235,36 @@ public class ConfigPlugin
       }
       throw new RuntimeException("Both HTTP and HTTPS ports are disabled");
     }
-
+    
     pollStart = System.currentTimeMillis();
-
+    
     execute();
   }
-
-
-
+  
+  
+  
   protected void execute() {
     // check whether the policy can be modified (only for first time unzip & run)
     // determined by the field isCertificateAuthority as undefined
     // if the CA with the DN already in trust store then it is done
-
+    
     if (caDN != null && caDN.length() != 0) {
       try {
-	if (log.isDebugEnabled()) {
-	  log.debug("Generating key for:" + caDN);
-	}
+        if (log.isDebugEnabled()) {
+          log.debug("Generating key for:" + caDN);
+        }
         X500Name dname = new X500Name(caDN);
         List list = cacheservice.getCertificates(dname);
         if (list != null && list.size() != 0) {
           if (log.isDebugEnabled()) {
             log.debug("crypto policy already configured.");
           }
-
+          
           return;
         }
-
-      // need to set default cert attribute policy, so that normal node
-      // can use that as their trusted policy
+        
+        // need to set default cert attribute policy, so that normal node
+        // can use that as their trusted policy
         CertificateAttributesPolicy certAttribPolicy =
           cryptoClientPolicy.getCertificateAttributesPolicy();
         certAttribPolicy.ou = dname.getOrganizationalUnit();
@@ -251,7 +278,7 @@ public class ConfigPlugin
         }
         return;
       }
-
+      
       cryptoClientPolicy.setIsCertificateAuthority(true);
     }
     if (upperCA != null) {
@@ -261,67 +288,68 @@ public class ConfigPlugin
       cryptoClientPolicy.setIsRootCA(true);
       checkOrMakeIdentity(null, "");
     }
-
+    
   }
-
+  
   public void setParameter(Object o) {
     //Collection l = getParameters();
     Logger logger = LoggerFactory.getInstance().createLogger(this);
-
+    
     if (!(o instanceof List)) {
       throw new IllegalArgumentException("Expecting a List argument to setParameter");
     }
     List l = (List) o;
     if (l.size() == 0 || l.size() > 3) {
       if (logger == null) {
-	throw new RuntimeException("Unable to get LoggingService");
+        throw new RuntimeException("Unable to get LoggingService");
       }
       logger.warn("Incorrect number of parameters. Format (caDN, ldapURL, [caURL])");
     }
     Iterator it = l.iterator();
-
+    
     try {
       caDN = (String)it.next();
       if (it.hasNext()) {
-	ldapURL = (String)it.next();
+        ldapURL = (String)it.next();
       }
       else {
-	ldapURL = "";
+        ldapURL = "";
       }
     } catch (Exception ex) {
       throw new RuntimeException("Parameter incorrect: " + caDN + " : " + ldapURL);
     }
-
+    
     if (logger.isDebugEnabled()) {
       logger.debug("CA DN: " + caDN + " - LDAP: " + ldapURL);
     }
-
+    
     if (l.size() > 2) {
       // this is not a root CA, get trusted ca policy
       // input is CAhost:CAagent, not complete URL
       upperCA = (String)it.next();
     }
   }
-
+  
   protected void addTrustedPolicy(String param, boolean primaryCA) {
-    ThreadService ts = (ThreadService)_sb.getService(this, ThreadService.class, null);
     CARequestThread t = new CARequestThread(param, primaryCA);
+    if (threadService != null) {
+      t.setThreadStartRequested(true);
+      Schedulable sched = threadService.getThread(this, t);
+      sched.start();
+      if (log.isDebugEnabled()) {
+        log.debug("Started CA request thread" + t.getInfoURL());
+      }
+    }
+    else {
+      if (log.isDebugEnabled()) {
+        log.debug("Thread Service not available yet: " + t.getInfoURL());
+      }
+    }
     synchronized(caRequestThreads) {
       caRequestThreads.push(t);
     }
-    if (ts == null) {
-      if (log.isErrorEnabled()) {
-        log.error("Unable to obtain ThreadService - starting a non-cougaar thread");
-      }
-      t.start();
-    }
-    else {
-      Schedulable sched = ts.getThread(this, t);
-      sched.start();
-      _sb.releaseService(this, ThreadService.class, ts);
-    }
   }
-
+  
   public synchronized void stop() {
     // Stop threads.
     synchronized(caRequestThreads) {
@@ -355,6 +383,11 @@ public class ConfigPlugin
       configParser = null;
     }
 
+    if (threadService != null) {
+      _sb.releaseService(this, ThreadService.class, threadService);
+      threadService = null;
+    }
+
     // release log services
     if (log != null) {
       _sb.releaseService(this, LoggingService.class, log);
@@ -362,7 +395,7 @@ public class ConfigPlugin
     }
     super.stop();
   }
-
+  
   protected void setCAInfo(CAInfo info, String requestURL) {
     TrustedCaPolicy tc = info.caPolicy;
     tc.caURL = requestURL;
@@ -376,7 +409,7 @@ public class ConfigPlugin
     }
     configParser.updateSecurityPolicy(cryptoClientPolicy);
   }
-
+  
   protected void saveTrustedCert(CAInfo info) {
     X509Certificate [] certChain = info.caCert;
     // install certificate to trust store
@@ -386,7 +419,7 @@ public class ConfigPlugin
       X500Name certdn = null;
       try {
         certdn = new X500Name(c.getSubjectDN().getName());
-
+        
         alias = certdn.getCommonName() + "-1";
       } catch (IOException iox) {
         throw new RuntimeException("Illegal name: " + c);
@@ -395,15 +428,15 @@ public class ConfigPlugin
       CertificateStatus cs = cacheservice.addKeyToCache(c, null, alias, CertificateType.CERT_TYPE_CA);
       // Update the certificate trust
       cacheservice.setCertificateTrust(c, cs, certdn, null);
-
+      
       if (log.isDebugEnabled()) {
         log.debug("Saving trusted cert: " + c + " : alias: " + alias);
       }
       cacheservice.saveCertificateInTrustedKeyStore(c, alias);
     }
-
+    
   }
-
+  
   protected synchronized void checkOrMakeIdentity(CAInfo info, String requestURL) {
     // check whether ca policy has been set
     if (configParser.getCaPolicy(caDN) == null) {
@@ -412,16 +445,16 @@ public class ConfigPlugin
       Hashtable attributeTable = new Hashtable();
       attributeTable.put("distinguishedName", caDN);
       attributeTable.put("ldapURL", ldapURL);
-
+      
       // other attributes should be static for unzip & run
-
+      
       PolicyHandler ph = new PolicyHandler(configParser, _sb);
       // retrieve caPolicyTemplate and add new information
       // there should be a CaPolicy created with this function
       // and storage should be updated with new CaPolicy
       ph.addCaPolicy(attributeTable);
     }
-
+    
     if (cryptoClientPolicy.isRootCA()) {
       if (log.isDebugEnabled()) {
         log.debug("Saving CryptoClientPolicy to file.");
@@ -431,51 +464,51 @@ public class ConfigPlugin
     else {
       setCAInfo(info, requestURL);
     }
-
+    
     generateCAIdentity();
-
+    
     if (log.isDebugEnabled()) {
       log.debug("CA created, now creating node cert.");
     }
-
+    
     // get node and agent cert
     // done in DirectoryKeyStore
     keyRingService.checkOrMakeCert(NodeInfo.getNodeName());
   }
-
+  
   private void generateCAIdentity() {
     // handle KeyRing and DirectoryKeyStore which have already initialized
     // with the default parameter (is not CA)
-
+    
     if (caDN == null || ldapURL == null) {
       log.warn("Cannot auto start CA, DN or LDAP has not been set.");
       return;
-
+      
       /*
-      caDN = "CN=NCA_CA, OU=CONUS, O=DLA, L=San Francisco, ST=CA, C=US, T=ca";
-      ldapURL = "ldap://yew:389/dc=rliao1,dc=cougaar,dc=org";
-      */
+       caDN = "CN=NCA_CA, OU=CONUS, O=DLA, L=San Francisco, ST=CA, C=US, T=ca";
+       ldapURL = "ldap://yew:389/dc=rliao1,dc=cougaar,dc=org";
+       */
     }
-
+    
     // check whether CA key already created
     /*
-    This code seems useless
-    try {
-      X500Name dname = new X500Name(caDN);
-    }
-    catch (IOException e) {
-      System.out.println("Unable to create CA certificate: " + e);
-      e.printStackTrace();
-      return;
-    }
-    */
-
+     This code seems useless
+     try {
+     X500Name dname = new X500Name(caDN);
+     }
+     catch (IOException e) {
+     System.out.println("Unable to create CA certificate: " + e);
+     e.printStackTrace();
+     return;
+     }
+     */
+    
     // start generate CA key
     X500Principal p = new X500Principal(caDN);
     AgentIdentityService agentIdentity = (AgentIdentityService)
-      _sb.getService(new CAIdentityClientImpl(p),
-					    AgentIdentityService.class,
-					    null);
+    _sb.getService(new CAIdentityClientImpl(p),
+        AgentIdentityService.class,
+        null);
     try {
       agentIdentity.acquire(null);
     }
@@ -483,18 +516,18 @@ public class ConfigPlugin
       log.warn("Unable to generate CA key: ", e);
       return;
     }
-
+    
   }
-
+  
   protected void setupSubscriptions() {
   }
-
+  
   /**
    * @author srosset
    *
    */
   private class CARequestThread
-    extends Thread
+  extends Thread
   {
     private String infoURL;
     private String requestURL;
@@ -502,14 +535,19 @@ public class ConfigPlugin
     private boolean isPrimaryCA = true;
     private int delayRequest = 1800000;
     private boolean cancelRequest = false;
+    private boolean threadStartRequested = false;
+    
+    public String getInfoURL() {
+      return infoURL;
+    }
     
     public CARequestThread(String param, boolean primaryCA) {
       isPrimaryCA = primaryCA;
-
+      
       String cahost = param.substring(0, param.indexOf(':'));
       int agentindex = param.indexOf(':');
       String caagent = param.substring(agentindex+1, param.length());
-
+      
       // if httpport param is given use it
       int portindex = caagent.indexOf(':');
       if (portindex != -1) {
@@ -544,22 +582,22 @@ public class ConfigPlugin
           throw new RuntimeException("Both HTTP and HTTPS ports are disabled");
         }
       }
-
+      
       if (httpsport != -1) {
         // If HTTPS port is enabled, select it by default
         infoURL = "https://" + cahost + ":" +
-          httpsport + "/$" + caagent + cryptoClientPolicy.getInfoURL();
+        httpsport + "/$" + caagent + cryptoClientPolicy.getInfoURL();
         requestURL = "https://" + cahost + ":" + httpsport;
       }
       else {
         infoURL = "http://" + cahost + ":" +
-          httpport + "/$" + caagent + cryptoClientPolicy.getInfoURL();
+        httpport + "/$" + caagent + cryptoClientPolicy.getInfoURL();
         requestURL = "http://" + cahost + ":" + httpport;
       }
-
+      
       requestURL += "/$" + caagent + cryptoClientPolicy.getRequestURL();
       //System.out.println("infoURL: " + infoURL + " : requestURL " + requestURL);
-
+      
       try {
         String waitPoll = System.getProperty("org.cougaar.core.security.configpoll", "5000");
         waittime = Integer.parseInt(waitPoll);
@@ -568,7 +606,7 @@ public class ConfigPlugin
           log.warn("Unable to parse configpoll property: " + ex.toString());
         }
       }
-
+      
       if (!isPrimaryCA) {
         try {
           String waitPoll = System.getProperty("org.cougaar.core.security.robustness.delaypoll", "1800000");
@@ -580,7 +618,7 @@ public class ConfigPlugin
         }
       }
     }
-
+    
     /**
      * Cancels outstanding request 
      */
@@ -588,7 +626,7 @@ public class ConfigPlugin
       cancelRequest = true;
       this.interrupt();
     }
-
+    
     public void run() {
       if (log.isDebugEnabled()) {
         log.debug("Launching thread...");
@@ -615,23 +653,23 @@ public class ConfigPlugin
         }
         try {
           ObjectInputStream ois = new ObjectInputStream(
-            new ServletRequestUtil().sendRequest(infoURL, "", waittime, noCheckSocketFactory));
+              new ServletRequestUtil().sendRequest(infoURL, "", waittime, noCheckSocketFactory));
           // return a trusted policy for this plug to send PKCS request
           // also return a certificate to install in the trusted store
           // the certificate may not be the same as the one specified by
           // the trusted policy, but need to be the upper level signer.
           // for simplicity the root CA certificate will return
-
+          
           // before the trusted CA starts up completely the CA
           // may return empty, in which case this thread will wait
           // until it gets the right answer.
           if (log.isDebugEnabled()) {
             log.debug("received reply from CA.");
           }
-
+          
           CAInfo info = (CAInfo)ois.readObject();
           ois.close();
-
+          
           // save trusted CA first, if backup CA use a delay to request certs
           saveTrustedCert(info);
           // there is a TrustedCAConfigPlugin that only installs trusted cert and policy
@@ -657,9 +695,9 @@ public class ConfigPlugin
               log.info("Start to request certificates from backup CA: " + infoURL);
             }
           }
-
+          
           checkOrMakeIdentity(info, requestURL);
-
+          
           return;
         } catch (Exception ex) {
           if (ex instanceof InterruptedException) {
@@ -690,6 +728,18 @@ public class ConfigPlugin
         }
       }
     }
+    /**
+     * @return Returns the threadStartRequested.
+     */
+    public boolean isThreadStartRequested() {
+      return threadStartRequested;
+    }
+    /**
+     * @param threadStartRequested The threadStartRequested to set.
+     */
+    public void setThreadStartRequested(boolean threadStartRequested) {
+      this.threadStartRequested = threadStartRequested;
+    }
   }
-
+  
 }
