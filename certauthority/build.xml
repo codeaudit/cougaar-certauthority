@@ -840,28 +840,64 @@
     </target>
     
     <target name="upload-overlay">
+      <property name="overlay.zip.name" value="${project.name}-${anthill.branch.name}-${cougaar.branch.name}.zip"/>
+      <move file="${project.name}.zip" tofile="${overlay.zip.name}"/>
       <if>
         <isset property="webdav.url"/>
         <then>
-          <echo message="Uploading ${project.name}.zip to ${webdav.url}"/>
+          <echo message="Uploading ${overlay.zip.name} to ${webdav.url}"/>
           <davput url="${webdav.url}" verbose="true" overwrite="true">
             <fileset dir="${securityservices.base}">
-               <include name="${project.name}.zip"/>
+               <include name="${overlay.zip.name}"/>
             </fileset>
           </davput>
           <!-- Rename resource. The resource is name as:
                ${project.name}-${project.branch}-${cougaar.branch} -->
-          <davmove url="${webdav.url}/${project.name}.zip" overwrite="true"
-                   destination="${webdav.url}/${project.name}-${anthill.branch.name}-${cougaar.branch.name}.zip"/>
+          <davmove url="${webdav.url}/${overlay.zip.name}" overwrite="true"
+                   destination="${webdav.url}/${overlay.zip.name}"/>
         </then>
       </if>
       <if>
-        <isset property="cougaarforge.upload"/>
+        <!-- The following properties should be defined in an external file:
+              +  cougaarforge.post.url - The URL used to upload a file using POST
+                                         Typically defined under "build.properties" under each project
+              +  cougaarforge.doUpload - true (upload) or false (don't upload)
+                                         Typically defined under ${user.home}/anthill.properties
+              +  cougaarforge.username 
+                                         Typically defined under ${user.home}/anthill.properties
+              +  cougaarforge.password 
+                                         Typically defined under ${user.home}/anthill.properties
+        -->
+        <isset property="cougaarforge.doUpload"/>
         <then>
-          <echo message="Uploading ${project.name}.zip to cougaarforge"/>
-          <scp file="${securityservices.base}/${project.name}.zip"
+          <echo message="Uploading ${overlay.zip.name} to cougaarforge"/>
+          <!--
+          <scp file="${securityservices.base}/${overlay.zip.name}"
                todir="${env.USER}@securitycore.cougaar.org:/var/www/gforge-projects/securitycore/auto/${anthill.branch.name}-${cougaar.branch.name}"
                keyfile="${user.home}/.ssh/id_rsa"/>
+          -->
+          <!--
+            certauthority:      http://cougaar.org/frs/admin/qrs.php?package_id=&group_id=54
+            fwsupport:          http://cougaar.org/frs/admin/qrs.php?package_id=&group_id=46
+            securebootstrapper: http://cougaar.org/frs/admin/qrs.php?package_id=&group_id=51
+            securemonitoring:   http://cougaar.org/frs/admin/qrs.php?package_id=&group_id=52
+            securitycore:       http://cougaar.org/frs/admin/qrs.php?package_id=&group_id=55
+            securityutils:      http://cougaar.org/frs/admin/qrs.php?package_id=&group_id=53
+
+            Login page: http://cougaar.org/account/login.php
+          -->
+          <post to="http://cougaar.org/account/login.php" verbose="true">
+            <prop name="return_to"          value=""/>
+            <prop name="form_loginname"     value="${cougaarforge.username}"/>
+            <prop name="form_pw"            value="${cougaarforge.password}"/>
+          </post>
+          <post to="${cougaarforge.post.url}"
+                verbose="true">
+            <prop name="userfile"     value="${overlay.zip.name}"/>
+            <prop name="release_name" value="${project.name}-${anthill.branch.name}-${cougaar.branch.name}"/>
+            <prop name="type_id"      value="3000"/>
+            <prop name="processor_id" value="8000"/>
+          </post>
         </then>
       </if>
     </target>
