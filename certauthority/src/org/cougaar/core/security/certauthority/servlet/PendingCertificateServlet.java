@@ -83,9 +83,7 @@ public class PendingCertificateServlet extends  HttpServlet
   {
     PrintWriter out=res.getWriter();
     //String role=null;
-    String cadnname=null;
-
-    cadnname =(String)req.getParameter("cadnname");
+    final String cadnname = (String)req.getParameter("cadnname");
     //role =(String)req.getParameter("role");
     if (log.isDebugEnabled()) {
       log.debug(cadnname);
@@ -125,8 +123,13 @@ public class PendingCertificateServlet extends  HttpServlet
     */
 
     try {
+    AccessController.doPrivileged(new PrivilegedAction() {
+      public Object run() {
       nodeConfiguration = new NodeConfiguration(cadnname,
 						support.getServiceBroker());
+        return null;
+      }
+    });
     }
     catch (Exception e) {
       out.print("Unable to read policy file: " + e);

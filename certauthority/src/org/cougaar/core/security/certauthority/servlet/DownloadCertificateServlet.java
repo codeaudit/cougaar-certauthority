@@ -35,6 +35,8 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import java.security.PrivilegedAction;
+import java.security.AccessController;
 
 import org.cougaar.core.security.crypto.Base64;
 import org.cougaar.core.security.crypto.CertDirServiceRequestor;
@@ -113,10 +115,15 @@ public class DownloadCertificateServlet extends  HttpServlet
       return;
     }
     */
-    CertDirServiceRequestor cdsr =
+    final CertDirServiceRequestor cdsr =
       new CertDirServiceRequestor(support.getServiceBroker(), cadnname);
+    AccessController.doPrivileged(new PrivilegedAction() {
+      public Object run() {
     search = (CACertDirectoryService)
       support.getServiceBroker().getService(cdsr, CACertDirectoryService.class, null);
+        return null;
+      }
+    });
 
     if((distinguishedName==null)||(distinguishedName=="")) {
       res.getWriter().print("Error in distinguishedName ");

@@ -257,7 +257,7 @@ public class BrowserSigningRequest
     String base64PubKey = req.getParameter("SPKAC");
     String userId = req.getParameter("userid");
     String email = req.getParameter("email");
-    String caDN = req.getParameter("dnname");
+    final String caDN = req.getParameter("dnname");
 
     if (log.isDebugEnabled()) {
       log.debug("userid: " + userId + " - email:" + email);
@@ -287,10 +287,15 @@ public class BrowserSigningRequest
 	return;
       }
       try  {
-	signer =
-	  (CertificateManagementService)support.getServiceBroker().getService(
-	    new CertificateManagementServiceClientImpl(caDN),
-	    CertificateManagementService.class, null);
+        AccessController.doPrivileged(new PrivilegedAction() {
+          public Object run() {
+    	    signer =
+	      (CertificateManagementService)support.getServiceBroker().getService(
+         	new CertificateManagementServiceClientImpl(caDN),
+	          CertificateManagementService.class, null);
+            return null;
+          }
+        });
       } catch (Exception exp)  {
         log.debug("Error signing browser certificate", exp);
         sendError(res,"Error ---" + exp.toString());
