@@ -86,8 +86,8 @@ public class ConfigPlugin
   private String caDN = null;
   private String ldapURL = null;
   private String upperCA = null;
-  public static String httpport = null;
-  private String httpsport = null;
+  private int httpport = -1;
+  private int httpsport = -1;
   private long pollStart;
   /** Used to obtain the certificate of the CA when there is no prior trust
    * relationship. This should be used only to run experiments, not in a deployed system.
@@ -177,8 +177,29 @@ public class ConfigPlugin
       configParser.getSecurityPolicies(CryptoClientPolicy.class);
     cryptoClientPolicy = (CryptoClientPolicy) sp[0];
 
-    httpport = sps.getProperty("org.cougaar.lib.web.http.port", null);
-    httpsport = System.getProperty("org.cougaar.lib.web.https.port", null);
+    try {
+      httpport = Integer.parseInt(sps.getProperty("org.cougaar.lib.web.http.port", null));
+    }
+    catch (Exception e) {
+      if (log.isInfoEnabled()) {
+        log.info("HTTP port not parsable. Not using HTTP");
+      }
+    }
+    try {
+      httpsport = Integer.parseInt(System.getProperty("org.cougaar.lib.web.https.port", null));
+    }
+    catch (Exception e) {
+      if (log.isInfoEnabled()) {
+        log.info("HTTPS port not parsable. Not using HTTPS");
+      }
+    }
+    if (httpport == -1 && httpsport == -1) {
+      // This is not a valid configuration. At least HTTP or HTTPS should be enabled.
+      if (log.isErrorEnabled()) {
+        log.error("Both HTTP and HTTPS ports are disabled");
+      }
+      throw new RuntimeException("Both HTTP and HTTPS ports are disabled");
+    }
 
     pollStart = System.currentTimeMillis();
 
@@ -299,21 +320,48 @@ public class ConfigPlugin
       if (portindex != -1) {
         portindex += agentindex + 1;
         caagent = param.substring(agentindex+1, portindex);
-        httpport = param.substring(portindex + 1, param.lastIndexOf(':'));
-        httpsport = param.substring(param.lastIndexOf(':')+1, param.length());
+        try {
+          httpport = -1;
+          httpport = Integer.parseInt(param.substring(portindex + 1, param.lastIndexOf(':')));
+        }
+        catch (Exception e) {
+          if (log.isInfoEnabled()) {
+            log.info("HTTP port not parsable. Not using HTTP");
+          }
+        }
+        try {
+          httpsport = -1;
+          httpsport = Integer.parseInt(param.substring(param.lastIndexOf(':')+1, param.length()));
+        }
+        catch (Exception e) {
+          if (log.isInfoEnabled()) {
+            log.info("HTTPS port not parsable. Not using HTTPS");
+          }
+        }
         if (log.isDebugEnabled()) {
           log.debug("agent: " + caagent + " / " + httpport + " / " + httpsport);
         }
+        if (httpport == -1 && httpsport == -1) {
+          // This is not a valid configuration. At least HTTP or HTTPS should be enabled.
+          if (log.isErrorEnabled()) {
+            log.error("Both HTTP and HTTPS ports are disabled");
+          }
+          throw new RuntimeException("Both HTTP and HTTPS ports are disabled");
+        }
       }
 
-      infoURL = "http://" + cahost + ":" +
-        httpport + "/$" + caagent + cryptoClientPolicy.getInfoURL();
-      if (httpsport == null || httpsport.equals("-1")) {
-        requestURL = "http://" + cahost + ":" + httpport;
-      }
-      else {
+      if (httpsport != -1) {
+        // If HTTPS port is enabled, select it by default
+        infoURL = "https://" + cahost + ":" +
+          httpsport + "/$" + caagent + cryptoClientPolicy.getInfoURL();
         requestURL = "https://" + cahost + ":" + httpsport;
       }
+      else {
+        infoURL = "http://" + cahost + ":" +
+          httpport + "/$" + caagent + cryptoClientPolicy.getInfoURL();
+        requestURL = "http://" + cahost + ":" + httpport;
+      }
+
       requestURL += "/$" + caagent + cryptoClientPolicy.getRequestURL();
       //System.out.println("infoURL: " + infoURL + " : requestURL " + requestURL);
 
