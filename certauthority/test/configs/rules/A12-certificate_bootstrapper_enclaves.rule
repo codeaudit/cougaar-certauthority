@@ -23,8 +23,11 @@ society.each_node do |node|
     caAgent = nil
     redundantCa = nil
 
+    # Search the CA managing this node.
     society.each_agent do |agent|
+      # First, the agent needs to be in the same enclave
       if (agent.node.host.get_facet(:enclave) == node.host.get_facet(:enclave))
+        # Second, the agent must be a CA
 	agent.each_facet("catype") do |caFacet|
 	  if caFacet["catype"] == $facetCaManagerAgent
 	    caAgent = agent
@@ -36,6 +39,18 @@ society.each_node do |node|
 	    break
 	  end
 	end
+      end
+    end
+    if caAgent == nil
+      # No CA was found. Try to use a Root CA.
+      # This is for the case when only one CA has been configured.
+      society.each_agent do |agent|
+	agent.each_facet("catype") do |caFacet|
+	  if caFacet["catype"] == $facetRootCaManagerAgent
+	    caAgent = agent
+            break
+          end
+        end
       end
     end
 
