@@ -100,7 +100,7 @@
       <property name="securityservices.classes" value="${securityservices.base}${file.separator}classes"/>
       <!-- The directory for ant-generated files (except .class files) -->
       <property name="securityservices.output" value="${securityservices.base}${file.separator}output"/>
-      <property name="securityservices.docdir" value="${securityservices.output}${file.separator}doc"/>
+      <property name="securityservices.docdir" value="${securityservices.staging}${file.separator}doc"/>
       <!-- The output directory for signed jar files -->
       <property name="securityservices.signed" value="${securityservices.output}${file.separator}signed"/>
       <!-- The base directories where the java source files are located -->
@@ -442,10 +442,12 @@
              </zip>
            </sequential>
         </for>
+         <!--
         <exec dir="${cougaar.install.path}/configs/ping"
               executable="ruby">
           <arg value="ASMT-TRANSFORM-EXAMPLE.rb"/>
         </exec>
+        -->
         <zip destfile="security-overlay.zip" update="true">
           <fileset dir="${cougaar.install.path}">
             <patternset>
@@ -695,7 +697,17 @@
              </sequential>
            </for>
          </case>
-          <case value="8">
+         <case value="8">
+           <for list="${module.build.list}" delimiter="," param="build.module.name">
+             <sequential>
+               <antcall target="call-ant-submodule">
+                  <param name="ant.target.name" value="javadocs"/>
+                  <param name="build.module.name" value="@{build.module.name}"/>
+               </antcall>
+             </sequential>
+           </for>
+         </case>
+          <case value="9">
           <!-- binary distribution, zip everything in staging -->
             <for list="${module.build.list}" delimiter="," param="build.module.name">
               <sequential>
@@ -714,7 +726,7 @@
               </sequential>
             </for>
          </case>
-         <case value="9">
+         <case value="10">
          <!-- source distribution -->
          <!-- zip build, build.properties, build.xml, custom-build.xml, lib, src, test -->
            <for list="${module.build.list}" delimiter="," param="build.module.name">
@@ -734,7 +746,7 @@
              </sequential>
            </for>
          </case>
-         <case value="10">
+         <case value="11">
            <for list="${module.subordinates}" delimiter="," param="build.module.name">
              <sequential>
                 <echo message="Copying build.xml file to ${securityservices.base}/../@{build.module.name}"/>
@@ -743,7 +755,7 @@
              </sequential>
            </for>
          </case>
-         <case value="11">
+         <case value="12">
            <input message="Enter commit message:" addproperty="commit.message"/>
            <antcall target="commit-build-file">
              <param name="build.module.name" value="installer"/>
@@ -827,23 +839,24 @@
        <echo level="info" message="5: Update, build and install the modules listed above."/>
        <echo level="info" message="6: Build and install current module (${current.module.name}) only."/>
        <echo level="info" message="7: Invoke 'ant clean' on all modules listed above."/>
+       <echo level="info" message="8: Build java doc"/>
        <if>
          <equals arg1="installer" arg2="${current.module.name}"/>
          <then>  
-           <echo level="info" message="8: Create binary distribution for all modules."/>
+           <echo level="info" message="9: Create binary distribution for all modules."/>
            <echo level="info" message="     The modules listed above must have been checked out and built previously."/>
-           <echo level="info" message="9: Create source distribution for all modules."/>
+           <echo level="info" message="10: Create source distribution for all modules."/>
            <echo level="info" message="     The modules listed above must have been checked out previously."/>
-           <echo level="info" message="10: Copy            build.xml to all other modules"/>
-           <echo level="info" message="11: Copy and commit build.xml to all other modules"/>
-           <input message="Enter your choice:" validargs="1,2,3,4,5,6,7,8,9,10,11" addproperty="build.choice"/>
+           <echo level="info" message="11: Copy            build.xml to all other modules"/>
+           <echo level="info" message="12: Copy and commit build.xml to all other modules"/>
+           <input message="Enter your choice:" validargs="1,2,3,4,5,6,7,8,9,10,11,12" addproperty="build.choice"/>
          </then>
          <else>
-           <echo level="info" message="8: Create binary distribution for ${current.module.name}."/>
+           <echo level="info" message="9: Create binary distribution for ${current.module.name}."/>
            <echo level="info" message="     The modules listed above must have been checked out and built previously."/>
-           <echo level="info" message="9: Create source distribution for ${current.module.name}."/>
+           <echo level="info" message="10: Create source distribution for ${current.module.name}."/>
            <echo level="info" message="     The modules listed above must have been checked out previously."/>
-           <input message="Enter your choice:" validargs="1,2,3,4,5,6,7,8,9" addproperty="build.choice"/>
+           <input message="Enter your choice:" validargs="1,2,3,4,5,6,7,8,9,10" addproperty="build.choice"/>
          </else>
        </if>
        <antcall target="process-interactive-command"/>
@@ -851,15 +864,20 @@
 		
     <!-- create javadocs -->
     <target name="javadocs" depends="init" description="Generating javadoc">
-        <echo message="Creating JavaDocs"/>
-        <delete file="${securityservices.docdir}/javadoc.tar.gz" verbose="true"/>
-        <javadoc classpathref="core.class.path" destdir="${securityservices.docdir}"
-            windowtitle="Cougaar security services API" sourcepath="${securityservices.src}" 
-            packagenames="edu.*, org.cougaar.core.security.*" 
-            excludepackagenames="org.cougaar.core.security.test.*"
-            author="true" version="true"/>
-	      <zip zipfile="${securityservices.staging}/${project.name}-docs.zip" basedir="${securityservices.docdir}"/>	
-        <echo message="Generated JavaDocs"/>
+        <if>
+          <available file="${securityservices.base}/src" type="dir"/>
+          <then>
+             <echo message="Creating JavaDocs"/>
+             <delete file="${securityservices.docdir}/${project.name}-docs.zip" verbose="true"/>
+             <javadoc classpathref="core.class.path" destdir="${securityservices.docdir}"
+                 windowtitle="Cougaar ${project.name} services API" sourcepath="${securityservices.src}" 
+                 packagenames="edu.*, org.cougaar.core.security.*" 
+                 excludepackagenames="org.cougaar.core.security.test.*"
+                 author="true" version="true"/>
+             <zip zipfile="${securityservices.staging}/${project.name}-docs.zip" basedir="${securityservices.docdir}"/>	
+             <echo message="Generated JavaDocs"/>
+          </then>
+        </if>
     </target>
 	
     <!-- Delete the ant-generated and $CIP/workspace directory -->
