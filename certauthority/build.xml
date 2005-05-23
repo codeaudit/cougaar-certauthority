@@ -512,7 +512,7 @@
     <target name="obtain-branch-name">
        <!-- If the installer module was checked out with a sticky tag, then
             use that tag to check out other modules. -->
-       <loadfile property="installer.cvs.root" srcFile="CVS/Root" failonerror="false">
+       <loadfile property="installer.cvs.root" srcFile="../installer/CVS/Root" failonerror="false">
          <filterchain>
            <striplinebreaks/>
          </filterchain>
@@ -521,7 +521,7 @@
             command="-q status -v build.xml"
             output="cvs.status.txt"
             failonerror="true"/>
-       <loadfile property="cvs.sticky.tag" srcFile="cvs.status.txt" failonerror="true">
+       <loadfile property="cvs.sticky.tag" srcFile="../installer/cvs.status.txt" failonerror="true">
          <filterchain>
            <linecontains>
              <contains value="Sticky Tag:"/>
@@ -547,23 +547,46 @@
          </else>
        </if>
        <echo message="Checking out using tag: ${cvs.sticky.tag.cmd}"/>
-       <delete file="cvs.status.txt"/>
+       <delete file="../installer/cvs.status.txt"/>
     </target>
 
     <!-- Check out (or update if module has already been checked out) a security services module
          The name of the module should be provided in the "build.module.name" property. -->
-    <target name="update-module">
+    <target name="update-module" depends="obtain-branch-name">
        <!-- First, determine what the CVSROOT should be.
-            1) Get it from a cvsroot.${project.name}.properties file
-            2) Try to get it from the CVS/Root file,
-            3) otherwise get it from the CVSROOT environment variable. -->
+            1) Get it from CVS/Root in installer module
+            2) Get it from a cvsroot.${project.name}.properties file
+            3) Try to get it from the CVS/Root file,
+            4) otherwise get it from the CVSROOT environment variable. -->
+       <if>
+         <isset property="installer.cvs.root"/>
+         <then>
+            <propertyregex property="installer.cvs.user"
+              input="${installer.cvs.root}"
+              regexp="([^@]*)@([^\@]*)"
+              select="\1"
+              casesensitive="false" />
+            <echo message="installer cvs user: ${installer.cvs.user}"/>
+         </then>
+       </if>
        <echo message="Loading CVSROOT from cvsroot.${build.module.name}.properties"/>
-       <loadfile property="cvs.root" srcFile="cvsroot.${build.module.name}.properties" failonerror="false">
+       <loadfile property="mymodule.cvs.root" srcFile="cvsroot.${build.module.name}.properties" failonerror="false">
          <filterchain>
            <striplinebreaks/>
            <expandproperties/>
          </filterchain>
        </loadfile>
+       <if>
+         <isset property="mymodule.cvs.root"/>
+         <then>
+            <propertyregex property="cvs.root"
+              input="${mymodule.cvs.root}"
+              regexp="([^@]*)@([^\@]*)"
+              select="${installer.cvs.user}@\2"
+              casesensitive="false" />
+            <echo message="cvs repository: ${cvs.root}"/>
+         </then>
+       </if>
        <if>
          <not>
            <isset property="cvs.root"/>
@@ -610,7 +633,7 @@
        <switch value="${build.choice}">
          <case value="1">
            <!-- First, obtain the branch name of the installer module -->
-           <antcallback target="obtain-branch-name" return="cvs.sticky.tag.cmd"/>
+ <!--           <antcallback target="obtain-branch-name" return="cvs.sticky.tag.cmd"/> -->
            <!-- Update modules -->
            <foreach list="${module.build.list}" delimiter="," target="update-module"
                     param="build.module.name" inheritall="true">
@@ -637,7 +660,7 @@
          </case>
          <case value="4">
            <!-- First, obtain the branch name of the installer module -->
-           <antcallback target="obtain-branch-name" return="cvs.sticky.tag.cmd"/> 
+ <!--           <antcallback target="obtain-branch-name" return="cvs.sticky.tag.cmd"/> -->
            <!-- Update and build modules. -->
            <foreach list="${module.build.list}" delimiter="," target="update-module"
                     param="build.module.name" inheritall="true">
@@ -649,7 +672,7 @@
          </case>
          <case value="5">
            <!-- First, obtain the branch name of the installer module -->
-           <antcallback target="obtain-branch-name" return="cvs.sticky.tag.cmd"/>
+ <!--           <antcallback target="obtain-branch-name" return="cvs.sticky.tag.cmd"/> -->
            <!-- Update, build and install modules. -->
            <foreach list="${module.build.list}" delimiter="," target="update-module"
                     param="build.module.name" inheritall="true">
