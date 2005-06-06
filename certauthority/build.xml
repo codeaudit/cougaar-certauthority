@@ -884,7 +884,7 @@
                  version="true">
                <packageset dir="${securityservices.src}" defaultexcludes="yes">
                  <include name="edu/**"/>
-                 <include name="org/cougaar/core/security/**"/>
+                 <include name="org/cougaar/**"/>
                </packageset>
              </javadoc>
              <zip zipfile="${securityservices.staging}/${project.name}-docs.zip" basedir="${securityservices.docdir}"/>	
