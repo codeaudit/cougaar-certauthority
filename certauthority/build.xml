@@ -422,9 +422,12 @@
 
     <!-- This target is used to generate a single ZIP file containing all
          of the security services.
-         * Type "ant security-overlay" from the installer module.
-         * cd $CIP/configs/ping
-         * ruby ASMT-TRANSFORM-EXAMPLE.rb
+         * Install Cougaar.
+         * Type ant interactive then select "Build the modules listed above" in the installer module.
+         * Type ant interactive then select "Build javadocs" in the installer module.
+         * Type "ant security-overlay" in the installer module.
+         * cd $CIP ; unzip security-overlay.zip 
+         * cd $CIP/configs/ping ; ruby ASMT-TRANSFORM-EXAMPLE.rb
          * This will generate the following files that should be updated
            in the ZIP file:
              configs/common/config_common.jar
@@ -871,13 +874,12 @@
         <if>
           <available file="${securityservices.base}/src" type="dir"/>
           <then>
-             <pathconvert targetos="unix" property="wl.path.unix" refid="core.class.path">
-             </pathconvert>
-             <echo message="Creating JavaDocs: ${wl.path.unix}"/>
+             <mkdir dir="${securityservices.docdir}"/>
+             <mkdir dir="${securityservices.staging}/tmpdoc"/>
              <delete file="${securityservices.docdir}/${project.name}-docs.zip" verbose="true"/>
              <javadoc
                  classpathref="core.class.path"
-                 destdir="${securityservices.docdir}"
+                 destdir="${securityservices.staging}/tmpdoc"
                  windowtitle="Cougaar ${project.name} services API"
                  author="true"
                  use="true"
@@ -887,7 +889,8 @@
                  <include name="org/cougaar/**"/>
                </packageset>
              </javadoc>
-             <zip zipfile="${securityservices.staging}/${project.name}-docs.zip" basedir="${securityservices.docdir}"/>	
+             <zip zipfile="${securityservices.docdir}/${project.name}-docs.zip" basedir="${securityservices.staging}/tmpdoc"/>	
+             <delete dir="${securityservices.staging}/tmpdoc"/>
              <echo message="Generated JavaDocs"/>
           </then>
         </if>
