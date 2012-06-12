@@ -206,7 +206,7 @@
          <then>
            <javac classpathref="core.class.path" debug="true" 
                deprecation="true" destdir="${securityservices.classes}"
-               source="1.4">
+               source="1.6">
              <src path="${securityservices.src}"/>
              <include name="**"/>
           </javac>
